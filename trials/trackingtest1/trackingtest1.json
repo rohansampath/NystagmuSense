@@ -1,0 +1,48 @@
+{
+  "columns" : {
+    "blink_left" : "ARFaceAnchor eyeBlinkLeft blend-shape coefficient, 0 (open)..1 (closed); not used to reject samples",
+    "blink_right" : "ARFaceAnchor eyeBlinkRight blend-shape coefficient, 0 (open)..1 (closed); not used to reject samples",
+    "host_time_s" : "ARFrame.timestamp, system uptime clock, seconds",
+    "left_dir_x" : "unit z-axis of leftEyeTransform, face-anchor coordinates, unitless",
+    "left_dir_y" : "unit z-axis of leftEyeTransform, face-anchor coordinates, unitless",
+    "left_dir_z" : "unit z-axis of leftEyeTransform, face-anchor coordinates, unitless",
+    "lookat_x_m" : "ARFaceAnchor.lookAtPoint, face-anchor coordinates, metres (+x = subject's left)",
+    "lookat_y_m" : "ARFaceAnchor.lookAtPoint, face-anchor coordinates, metres (+y = up)",
+    "lookat_z_m" : "ARFaceAnchor.lookAtPoint, face-anchor coordinates, metres (+z = out of face)",
+    "right_dir_x" : "unit z-axis of rightEyeTransform, face-anchor coordinates, unitless",
+    "right_dir_y" : "unit z-axis of rightEyeTransform, face-anchor coordinates, unitless",
+    "right_dir_z" : "unit z-axis of rightEyeTransform, face-anchor coordinates, unitless",
+    "stim_bg_gray" : "scheduled background grey level, sRGB code value 0 (black)..1 (white); not photometric luminance",
+    "stim_displacement_pt" : "scheduled cumulative stripe displacement, SwiftUI points (+ = rightward on screen)",
+    "t_s" : "seconds since session start (monotonic)",
+    "tracked" : "1 if ARFaceAnchor.isTracked for this frame, else 0; gaze fields empty when 0"
+  },
+  "device" : {
+    "appVersion" : "1.0",
+    "model" : "iPhone17,1",
+    "systemName" : "iOS",
+    "systemVersion" : "26.6.2"
+  },
+  "droppedOutOfOrderCount" : 0,
+  "droppedOutsideWindowCount" : 3,
+  "gazeSource" : "ARKit ARFaceTrackingConfiguration (TrueDepth)",
+  "issues" : [
+
+  ],
+  "observedSampleRateHz" : 60.01031992052717,
+  "plannedDurationSeconds" : 10,
+  "recordedSpanSeconds" : 9.964952707999942,
+  "sampleCount" : 599,
+  "schemaVersion" : 1,
+  "sessionID" : "3DA64179-B90B-4832-B699-59275F510186",
+  "startedAt" : "2026-10-24T18:48:54Z",
+  "stimulus" : {
+    "direction" : "rightward",
+    "fadeHalfCycleSeconds" : 30,
+    "pitchToWidthRatio" : 2.4,
+    "speedPointsPerSecond" : 90,
+    "stripeWidthRatio" : 0.02
+  },
+  "timingNotes" : "t_s = ARFrame.timestamp - session start, both on the system-uptime clock. Session start is when the first camera frame was received; the stimulus animation uses the same reference. stim_* columns are the stimulus state scheduled for t_s, not a confirmed displayed frame: display latency and camera exposure\/processing latency (typically tens of ms) are not compensated.",
+  "trackedSampleCount" : 599
+}
