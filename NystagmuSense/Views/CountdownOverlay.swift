@@ -18,7 +18,7 @@ struct CountdownOverlay: View {
                 .foregroundColor(.white)
         }
         .onAppear { vm.start() }
-        .onChange(of: vm.seconds) { if $0 <= 0 { go = true } }
+        .onChange(of: vm.seconds) { _, s in if s <= 0 { go = true } }
         .navigationDestination(isPresented: $go) { TestView() }
     }
 }

@@ -5,70 +5,34 @@
 //  Created by Rohan Sampath on 6/30/25.
 //
 
+import QuartzCore
 import SwiftUI
 
+/// Renders the moving-stripe stimulus. All maths lives in `StimulusEngine`;
+/// this view only draws the state at the current time.
 struct FadingStripeView: View {
-
-    // MARK: - Public binding
-    @Binding var shade: Double               // 0 (white) … 100 (black)
-
-    // MARK: - Tunables
-    private let stripeWidthRatio: CGFloat = 0.02   // 1 % of screen width ≈ 3-4 px
-    private let speedPixelsPerSec   : CGFloat = 90// how fast stripes travel
-    private let fadeHalfCycle       : Double  = 30 // seconds (white↔︎black)
-
-    // MARK: - Animation state
-    @State private var startDate = Date()
+    let engine: StimulusEngine
+    /// Stimulus onset on the system-uptime clock (`CACurrentMediaTime()`).
+    /// `nil` → render the static t = 0 frame.
+    let startTime: TimeInterval?
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 120.0)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 120.0)) { _ in
             Canvas { ctx, size in
-                // 1. Background luminance
-                let lum = currentLuminance(date: timeline.date)
-                ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                         with: .color(Color(white: lum)))
+                let elapsed = startTime.map { CACurrentMediaTime() - $0 } ?? 0
 
-                // 2. Draw ultra-thin stripes that scroll endlessly
-                drawStripes(in: &ctx, size: size, at: timeline.date)
+                // 1. Background
+                ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .color(Color(white: engine.backgroundGray(at: elapsed))))
+
+                // 2. Stripes
+                let w = engine.stripeWidth(viewWidth: size.width)
+                for x in engine.stripePositions(at: elapsed, viewWidth: size.width) {
+                    ctx.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
+                             with: .color(.black))
+                }
             }
         }
         .ignoresSafeArea()
-        .onAppear { startDate = .now }      // reset phase each test run
-    }
-
-    // MARK: - Drawing helpers
-    private func stripeWidth(size: CGSize) -> CGFloat {
-        max(1, size.width * stripeWidthRatio)        // at least 1 px
-    }
-    private func pitch(size: CGSize) -> CGFloat { stripeWidth(size: size) * 2.4 }
-
-    private func drawStripes(in ctx: inout GraphicsContext,
-                             size: CGSize,
-                             at date: Date) {
-        let w      = stripeWidth(size: size)
-        let p      = pitch(size: size)
-        let elapsed = CGFloat(date.timeIntervalSince(startDate))
-        // Continuous offset: distance = speed * time  mod  pitch
-        let offset = (elapsed * speedPixelsPerSec).truncatingRemainder(dividingBy: p)
-
-        // Start a few pitches off-screen so the wrap is invisible
-        var x = -3 * p + offset
-        while x < size.width + p {
-            ctx.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
-                     with: .color(.black))
-            x += p
-        }
-    }
-
-    // MARK: - Luminance & shade
-    private func currentLuminance(date: Date) -> CGFloat {
-        let phase = (date.timeIntervalSince(startDate) / fadeHalfCycle)
-                    .truncatingRemainder(dividingBy: 2)
-        // phase 0…1 → white→black, 1…2 → black→white
-        let lum = phase <= 1 ? 1 - phase : phase - 1
-
-        // Update bound shade (0 = white, 100 = black)
-        DispatchQueue.main.async { shade = (1 - lum) * 100 }
-        return lum
     }
 }

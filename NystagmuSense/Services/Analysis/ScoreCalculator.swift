@@ -4,6 +4,11 @@
 //
 //  Created by Rohan Sampath on 6/30/25.
 //
+//
+//  LEGACY / UNVALIDATED — log-scaled background shade, not a measured
+//  contrast-sensitivity score. Not used by the recording MVP; kept only so
+//  historical Core Data results remain interpretable.
+//
 import Foundation
 struct ScoreCalculator {
     func score(fromShade s: Double) -> Double {

@@ -4,56 +4,162 @@
 //
 //  Created by Rohan Sampath on 6/30/25.
 //
+//  Lightweight session coordinator:
+//  start gaze provider → first frame starts clock + stimulus → record for
+//  `duration` → stop → export CSV/JSON → report outcome.
+//
+//  OKN detection and scoring are intentionally NOT part of this path
+//  (see Services/Analysis and docs/ARCHITECTURE.md).
+//
 
-import Combine
+import QuartzCore
 import SwiftUI
 
 @MainActor
 final class TestViewModel: ObservableObject {
-    @Published var shadeLevel: Double = 0        // 0–100
-    @Published var score:      Double?           // 0–2 finished
-    @Published var running     = false
-
-    private var samples: [EyeMovementSample] = []
-    private let maxBuf = 120                     // last ~2 s
-    private let eyeSession = EyeTrackingSession()
-    private let okn        = OKNAnalyzer()
-    private let scorer     = ScoreCalculator()
-    private var bags       = Set<AnyCancellable>()
-
-    init() {
-        eyeSession.$sample
-            .compactMap { $0 }
-            .sink { [weak self] in self?.ingest($0) }
-            .store(in: &bags)
+    struct RecordingSummary: Equatable {
+        let files: RecordingFiles
+        let sampleCount: Int
+        let trackedCount: Int
+        let sampleRateHz: Double?
+        let issues: [String]
     }
 
-    func start() { running = true; eyeSession.start() }
-    func stop()  { running = false; eyeSession.stop() }
+    enum Phase: Equatable {
+        case idle
+        case starting                       // provider started, waiting for first frame
+        case recording
+        case finished(RecordingSummary)
+        case failed(String)
+        case cancelled
+    }
 
-    private func ingest(_ s: EyeMovementSample) {
-        samples.append(s)
-        if samples.count > maxBuf { samples.removeFirst() }
+    @Published private(set) var phase: Phase = .idle
+    /// Stimulus onset on the system-uptime clock; nil until the first camera frame.
+    @Published private(set) var stimulusStartTime: TimeInterval?
+    @Published private(set) var faceTracked = false
 
-        if okn.isOptokineticLost(in: samples) {
-            finish()
+    let stimulus: StimulusEngine
+    let duration: TimeInterval
+
+    private let provider: GazeProvider
+    private let startupTimeout: TimeInterval
+    private let outputDirectory: URL
+    private let now: () -> TimeInterval
+    private var recorder: SessionRecorder?
+    private var timer: Task<Void, Never>?
+
+    init(provider: GazeProvider = ARKitGazeProvider(),
+         stimulus: StimulusEngine = StimulusEngine(),
+         duration: TimeInterval = 10,
+         startupTimeout: TimeInterval = 5,
+         outputDirectory: URL = SessionRecorder.defaultDirectory,
+         now: @escaping () -> TimeInterval = CACurrentMediaTime) {
+        self.provider        = provider
+        self.stimulus        = stimulus
+        self.duration        = duration
+        self.startupTimeout  = startupTimeout
+        self.outputDirectory = outputDirectory
+        self.now             = now
+    }
+
+    // MARK: - Lifecycle
+
+    /// Safe to call repeatedly (e.g. from `onAppear`); only the first call starts a session.
+    func start() {
+        guard phase == .idle else { return }
+        guard provider.isSupported else { fail(.unsupportedDevice); return }
+
+        // ARKitGazeProvider delivers callbacks on the main thread.
+        provider.onSample = { [weak self] s in MainActor.assumeIsolated { self?.ingest(s) } }
+        provider.onError  = { [weak self] e in MainActor.assumeIsolated { self?.handle(e) } }
+
+        phase = .starting
+        provider.start()                    // may report an error synchronously
+        if phase == .starting {
+            schedule(after: startupTimeout) { [weak self] in
+                if self?.phase == .starting { self?.fail(.noFramesReceived) }
+            }
         }
     }
 
-    private func finish() {
-        stop()
-        score = scorer.score(fromShade: shadeLevel)
-        save()
+    /// Stops tracking and exports. Idempotent: only the first call while recording has any effect.
+    func finish() {
+        guard phase == .recording, let recorder else { return }
+        stopCapture()
+
+        guard !recorder.samples.isEmpty else {
+            phase = .failed(RecordingError.noSamples.localizedDescription)
+            return
+        }
+        do {
+            let files = try recorder.export(to: outputDirectory, device: DeviceInfo.current())
+            phase = .finished(RecordingSummary(files: files,
+                                               sampleCount: recorder.samples.count,
+                                               trackedCount: recorder.trackedCount,
+                                               sampleRateHz: recorder.observedSampleRate,
+                                               issues: recorder.issues))
+        } catch {
+            phase = .failed("Recording could not be saved: \(error.localizedDescription)")
+        }
     }
 
-    private func save() {
-        let ctx = PersistenceController.shared.container.viewContext
-        let r   = TestResult(context: ctx)
-        r.id         = UUID()
-        r.date       = .now
-        r.score      = score ?? 0
-        r.shadeLevel = shadeLevel
-        r.duration   = 60
-        try? ctx.save()
+    /// Called when the user leaves early. Discards the partial recording.
+    func cancel() {
+        guard phase == .starting || phase == .recording else { return }
+        stopCapture()
+        phase = .cancelled
+    }
+
+    // MARK: - Provider events
+
+    private func ingest(_ s: EyeMovementSample) {
+        if phase == .starting { beginRecording() }
+        guard phase == .recording else { return }
+        recorder?.record(s)
+        if faceTracked != s.isTracked { faceTracked = s.isTracked }
+    }
+
+    private func beginRecording() {
+        let t0 = now()
+        recorder          = SessionRecorder(startUptime: t0, duration: duration, stimulus: stimulus)
+        stimulusStartTime = t0
+        phase             = .recording
+        schedule(after: duration) { [weak self] in self?.finish() }
+    }
+
+    private func handle(_ error: GazeTrackingError) {
+        switch phase {
+        case .starting:
+            fail(error)
+        case .recording:
+            // Keep what was captured; the gap/failure is recorded in the sidecar.
+            recorder?.note(error.localizedDescription)
+            if error != .interrupted { finish() }
+        default:
+            break
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func fail(_ error: GazeTrackingError) {
+        stopCapture()
+        phase = .failed(error.localizedDescription)
+    }
+
+    private func stopCapture() {
+        timer?.cancel()
+        timer = nil
+        provider.stop()
+    }
+
+    private func schedule(after seconds: TimeInterval, _ action: @escaping @MainActor () -> Void) {
+        timer?.cancel()
+        timer = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            action()
+        }
     }
 }
