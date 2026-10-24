@@ -1,40 +1,43 @@
-//
-//  EyeTrackingSession.swift
-//  NystagmuSense
-//
-//  Created by Rohan Sampath on 6/30/25.
-//
-
 import ARKit
-import Combine
 
-final class EyeTrackingSession: NSObject, ARSessionDelegate, ObservableObject {
-    @Published var sample: EyeMovementSample?
+final class EyeTrackingSession: NSObject, ARSessionDelegate {
     private let session = ARSession()
-    private var prev: EyeMovementSample?
+    var onSample: ((GazeSample) -> Void)?
+    var onFailure: ((String) -> Void)?
 
     func start() {
-        guard ARFaceTrackingConfiguration.isSupported else { return }
-        let cfg = ARFaceTrackingConfiguration()
-        cfg.isWorldTrackingEnabled = false
+        session.delegateQueue = .main
         session.delegate = self
-        session.run(cfg, options: [.resetTracking])
+        let configuration = ARFaceTrackingConfiguration()
+        configuration.isWorldTrackingEnabled = false
+        configuration.maximumNumberOfTrackedFaces = 1
+        session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
     }
-    func stop() { session.pause(); prev = nil }
 
-    func session(_ s: ARSession, didUpdate f: ARFrame) {
-        guard let face = f.anchors.compactMap({ $0 as? ARFaceAnchor }).first else { return }
-        let l = face.leftEyeTransform.columns.3, r = face.rightEyeTransform.columns.3
-        var cur = EyeMovementSample(
-            timestamp: f.timestamp,
-            leftGaze:  .init(l.x, l.y, l.z),
-            rightGaze: .init(r.x, r.y, r.z),
-            velocity:  0
-        )
-        if let p = prev {
-            cur.velocity = EyeMovementDetector.velocityDegPerSec(from: p, to: cur)
-        }
-        prev = cur
-        sample = cur
+    func stop() {
+        session.pause()
+        session.delegate = nil
+    }
+
+    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        let face = frame.anchors.compactMap { $0 as? ARFaceAnchor }.first
+        let point = face?.lookAtPoint
+        let tracked = face?.isTracked == true
+        let valid = tracked && point.map { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite } == true
+        onSample?(GazeSample(
+            timestamp: frame.timestamp,
+            x: valid ? point?.x : nil, y: valid ? point?.y : nil, z: valid ? point?.z : nil,
+            faceTracked: tracked, valid: valid,
+            blinkLeft: face?.blendShapes[.eyeBlinkLeft]?.floatValue,
+            blinkRight: face?.blendShapes[.eyeBlinkRight]?.floatValue
+        ))
+    }
+
+    func session(_ session: ARSession, didFailWithError error: Error) {
+        onFailure?("ARKit failed: \(error.localizedDescription)")
+    }
+
+    func sessionWasInterrupted(_ session: ARSession) {
+        onFailure?("ARKit was interrupted. Recording stopped; any saved data is partial.")
     }
 }
