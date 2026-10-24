@@ -70,7 +70,8 @@ only Deliverable 1 (10 s recording + export + plot) is implemented.
 4. After ~10 s the stimulus disappears and the card shows **Recording saved** with
    sample count and observed rate. **Cancel** (or leaving the screen) discards the
    recording. If the app leaves the foreground mid-recording, it stops and saves the
-   partial data, with the reason in the sidecar's `issues`. Zero tracked samples counts as a
+   partial data, with the reason in the sidecar's `issues`. If saving fails, the card
+   offers **Retry Export** (the samples stay in memory until you leave the screen). Zero tracked samples counts as a
    failed capture even though the file is saved.
 
 ## Export
@@ -86,13 +87,17 @@ only Deliverable 1 (10 s recording + export + plot) is implemented.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r scripts/requirements.txt
 python3 scripts/plot_gaze.py path/to/NS_20261024-101500_ABCD1234.csv
-# → prints stats, writes NS_..._ABCD1234.png next to the CSV (or --out file.png)
+# → prints stats, writes NS_..._ABCD1234.png next to the CSV
+#   --output file.png to choose the path, --show to open an interactive window
 ```
 
-The plot shows raw, uncalibrated horizontal signals (left/right eye direction x,
-lookAtPoint x) against time, with untracked periods shaded. It doesn't classify
+The plot shows raw, uncalibrated signals against time: left/right eye direction x,
+lookAtPoint x and lookAtPoint y. Untracked periods are shaded, and lines are broken
+wherever frames are missing (gap > 2.5× the median frame interval), so unobserved
+time is never drawn as data. Non-finite values count as missing. It doesn't classify
 OKN. Interpret it by eye. It refuses empty, malformed, or time-decreasing files
-rather than reordering or interpolating.
+rather than reordering or interpolating, and exits with an error (no PNG) if no sample
+has a tracked face.
 
 ## CSV format (schema v1)
 

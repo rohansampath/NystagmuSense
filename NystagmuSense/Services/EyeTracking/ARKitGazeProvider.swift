@@ -31,7 +31,8 @@ final class ARKitGazeProvider: NSObject, GazeProvider, ARSessionDelegate {
         let cfg = ARFaceTrackingConfiguration()
         cfg.isWorldTrackingEnabled = false
         cfg.maximumNumberOfTrackedFaces = 1
-        session.delegate = self          // delegateQueue nil → main thread
+        session.delegateQueue = .main    // TestViewModel assumes main-thread callbacks
+        session.delegate = self
         session.run(cfg, options: [.resetTracking, .removeExistingAnchors])
     }
 

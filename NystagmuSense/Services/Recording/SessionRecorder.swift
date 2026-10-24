@@ -42,6 +42,7 @@ struct SessionRecorder {
 
     private(set) var samples: [RecordedSample] = []
     private(set) var droppedOutsideWindow = 0
+    private(set) var droppedOutOfOrder = 0
     private(set) var issues: [String] = []
 
     init(sessionID: UUID = UUID(), startUptime: TimeInterval, startedAt: Date = .now,
@@ -53,11 +54,16 @@ struct SessionRecorder {
         self.stimulus    = stimulus
     }
 
-    /// Adds a sample if it falls inside [0, duration]. Returns whether it was kept.
+    /// Adds a sample if it falls inside [0, duration] and doesn't go back in
+    /// time. Returns whether it was kept. Samples are never reordered.
     @discardableResult
     mutating func record(_ gaze: EyeMovementSample) -> Bool {
         let t = gaze.timestamp - startUptime
         guard t >= 0, t <= duration else { droppedOutsideWindow += 1; return false }
+        if let last = samples.last, gaze.timestamp < last.gaze.timestamp {
+            droppedOutOfOrder += 1
+            return false
+        }
         samples.append(RecordedSample(t: t, gaze: gaze, stimulus: stimulus.snapshot(at: t)))
         return true
     }
@@ -124,6 +130,7 @@ struct SessionRecorder {
             sampleCount: samples.count,
             trackedSampleCount: trackedCount,
             droppedOutsideWindowCount: droppedOutsideWindow,
+            droppedOutOfOrderCount: droppedOutOfOrder,
             observedSampleRateHz: observedSampleRate,
             stimulus: stimulus.config,
             issues: issues

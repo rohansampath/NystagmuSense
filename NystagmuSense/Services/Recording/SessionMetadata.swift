@@ -42,6 +42,7 @@ struct SessionMetadata: Codable, Equatable {
     let sampleCount: Int
     let trackedSampleCount: Int
     let droppedOutsideWindowCount: Int
+    let droppedOutOfOrderCount: Int
     let observedSampleRateHz: Double?
     let stimulus: StimulusConfig
     let issues: [String]

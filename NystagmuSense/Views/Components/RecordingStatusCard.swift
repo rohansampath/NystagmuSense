@@ -10,7 +10,10 @@ import SwiftUI
 struct RecordingStatusCard: View {
     let phase: TestViewModel.Phase
     let faceTracked: Bool
+    let trackedCount: Int
     let duration: TimeInterval
+    let canRetryExport: Bool
+    let onRetryExport: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -26,6 +29,7 @@ struct RecordingStatusCard: View {
                 Label(faceTracked ? "Face tracked" : "Face not detected",
                       systemImage: faceTracked ? "eye" : "eye.slash")
                     .foregroundStyle(faceTracked ? .green : .red)
+                Text("\(trackedCount) samples with face tracked").monospacedDigit()
                 Button("Cancel", action: onClose)
 
             case .finished(let s):
@@ -49,7 +53,12 @@ struct RecordingStatusCard: View {
             case .failed(let message):
                 Text("Recording failed").font(.headline)
                 Text(message).foregroundStyle(.red)
-                Button("Done", action: onClose).buttonStyle(.bordered)
+                HStack {
+                    if canRetryExport {
+                        Button("Retry Export", action: onRetryExport).buttonStyle(.borderedProminent)
+                    }
+                    Button("Done", action: onClose).buttonStyle(.bordered)
+                }
 
             case .cancelled:
                 EmptyView()

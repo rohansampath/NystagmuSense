@@ -61,6 +61,24 @@ class PlotGazeTests(unittest.TestCase):
         with self.assertRaisesRegex(plot_gaze.RecordingError, "decreases"):
             plot_gaze.load_recording(self.write("\n".join([HEADER, *rows]) + "\n"))
 
+    def test_non_finite_values_are_missing(self):
+        row = TRACKED.format(t=0, h=100).replace("0.01", "inf")
+        data = plot_gaze.load_recording(self.write(HEADER + "\n" + row + "\n"))
+        self.assertTrue(math.isnan(data["lookat_x_m"][0]))
+        self.assertEqual(data["lookat_y_m"], [0.02])
+
+    def test_gaps_are_broken_not_bridged(self):
+        t, v = plot_gaze.break_gaps([0, 0.1, 0.5], [1, 2, 3], max_dt=0.2)
+        self.assertEqual(t[:2], [0, 0.1])
+        self.assertTrue(math.isnan(v[2]))
+        self.assertEqual((t[3], v[3]), (0.5, 3))
+
+    def test_all_untracked_fails_without_png(self):
+        rows = [UNTRACKED.format(t=0, h=100), UNTRACKED.format(t=0.1, h=100.1)]
+        path = self.write("\n".join([HEADER, *rows]) + "\n")
+        self.assertEqual(plot_gaze.main([path]), 1)
+        self.assertFalse(Path(path).with_suffix(".png").exists())
+
     def test_main_returns_error_for_missing_file(self):
         self.assertEqual(plot_gaze.main(["/nonexistent/session.csv"]), 1)
 

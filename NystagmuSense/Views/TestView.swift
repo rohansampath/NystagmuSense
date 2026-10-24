@@ -17,7 +17,10 @@ struct TestView: View {
             .overlay(alignment: .top) {
                 RecordingStatusCard(phase: vm.phase,
                                     faceTracked: vm.faceTracked,
+                                    trackedCount: vm.trackedCount,
                                     duration: vm.duration,
+                                    canRetryExport: vm.canRetryExport,
+                                    onRetryExport: vm.retryExport,
                                     onClose: close)
                     .padding()
             }

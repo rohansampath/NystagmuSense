@@ -38,6 +38,10 @@ final class TestViewModel: ObservableObject {
     /// Stimulus onset on the system-uptime clock; nil until the first camera frame.
     @Published private(set) var stimulusStartTime: TimeInterval?
     @Published private(set) var faceTracked = false
+    /// Face-tracked samples kept so far in this session (live progress).
+    @Published private(set) var trackedCount = 0
+    /// True after a failed export; samples stay in memory for `retryExport()`.
+    @Published private(set) var canRetryExport = false
 
     let stimulus: StimulusEngine
     let duration: TimeInterval
@@ -92,16 +96,13 @@ final class TestViewModel: ObservableObject {
             phase = .failed(RecordingError.noSamples.localizedDescription)
             return
         }
-        do {
-            let files = try recorder.export(to: outputDirectory, device: DeviceInfo.current())
-            phase = .finished(RecordingSummary(files: files,
-                                               sampleCount: recorder.samples.count,
-                                               trackedCount: recorder.trackedCount,
-                                               sampleRateHz: recorder.observedSampleRate,
-                                               issues: recorder.issues))
-        } catch {
-            phase = .failed("Recording could not be saved: \(error.localizedDescription)")
-        }
+        export(recorder)
+    }
+
+    /// Re-attempts a failed export of the samples still held in memory.
+    func retryExport() {
+        guard canRetryExport, let recorder else { return }
+        export(recorder)
     }
 
     /// App left the foreground: camera capture can't continue honestly, so stop
@@ -131,8 +132,23 @@ final class TestViewModel: ObservableObject {
     private func ingest(_ s: EyeMovementSample) {
         if phase == .starting { beginRecording() }
         guard phase == .recording else { return }
-        recorder?.record(s)
+        if recorder?.record(s) == true, s.isTracked { trackedCount += 1 }
         if faceTracked != s.isTracked { faceTracked = s.isTracked }
+    }
+
+    private func export(_ recorder: SessionRecorder) {
+        do {
+            let files = try recorder.export(to: outputDirectory, device: DeviceInfo.current())
+            canRetryExport = false
+            phase = .finished(RecordingSummary(files: files,
+                                               sampleCount: recorder.samples.count,
+                                               trackedCount: recorder.trackedCount,
+                                               sampleRateHz: recorder.observedSampleRate,
+                                               issues: recorder.issues))
+        } catch {
+            canRetryExport = true
+            phase = .failed("Recording could not be saved: \(error.localizedDescription)")
+        }
     }
 
     private func beginRecording() {

@@ -37,6 +37,15 @@ struct SessionRecorderTests {
         #expect(r.droppedOutsideWindow == 2)
     }
 
+    @Test func outOfOrderSamplesAreDroppedNotReordered() {
+        var r = makeRecorder()
+        r.record(Fixture.tracked(at: 101))
+        let kept = r.record(Fixture.tracked(at: 100.5))
+        #expect(!kept)
+        #expect(r.samples.map(\.t) == [1])
+        #expect(r.droppedOutOfOrder == 1)
+    }
+
     @Test func statsAndUntrackedSamples() {
         var r = makeRecorder()
         r.record(Fixture.tracked(at: 100))

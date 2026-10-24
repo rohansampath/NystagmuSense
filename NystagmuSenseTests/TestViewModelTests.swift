@@ -56,6 +56,11 @@ struct TestViewModelTests {
         #expect(vm.phase == .recording)
         #expect(vm.stimulusStartTime == 100)
         #expect(vm.faceTracked)
+        #expect(vm.trackedCount == 0)               // first frame predates t0 → dropped
+        provider.emit(Fixture.tracked(at: 100.1))
+        provider.emit(.untracked(at: 100.2))
+        #expect(vm.trackedCount == 1)
+        #expect(!vm.faceTracked)
     }
 
     @Test func finishExportsExactlyOnce() throws {
@@ -73,6 +78,29 @@ struct TestViewModelTests {
         #expect(s.sampleCount == 2)
         #expect(exportedSessions().count == 1)
         #expect(provider.stopCount == 1)
+    }
+
+    @Test func failedExportCanBeRetried() throws {
+        // A regular file where the output folder should be makes the export fail.
+        try Data().write(to: outputDir)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = makeVM(now: 100)
+        vm.start()
+        provider.emit(Fixture.tracked(at: 100.0))
+        vm.finish()
+        guard case .failed = vm.phase else {
+            Issue.record("expected failed, got \(vm.phase)"); return
+        }
+        #expect(vm.canRetryExport)
+
+        try FileManager.default.removeItem(at: outputDir)
+        vm.retryExport()
+        guard case .finished(let s) = vm.phase else {
+            Issue.record("expected finished after retry, got \(vm.phase)"); return
+        }
+        #expect(s.sampleCount == 1)
+        #expect(!vm.canRetryExport)
+        #expect(exportedSessions().count == 1)
     }
 
     @Test func zeroSamplesIsReportedAsFailure() {
