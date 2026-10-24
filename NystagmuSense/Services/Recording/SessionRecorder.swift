@@ -87,6 +87,7 @@ struct SessionRecorder {
         "lookat_x_m", "lookat_y_m", "lookat_z_m",
         "left_dir_x", "left_dir_y", "left_dir_z",
         "right_dir_x", "right_dir_y", "right_dir_z",
+        "blink_left", "blink_right",
         "stim_bg_gray", "stim_displacement_pt",
     ]
 
@@ -100,6 +101,9 @@ struct SessionRecorder {
             for v in [s.gaze.lookAtPoint, s.gaze.leftEyeDirection, s.gaze.rightEyeDirection] {
                 // Empty fields = missing data (untracked frame), never zeros.
                 fields += v.map { [$0.x, $0.y, $0.z].map { "\($0)" } } ?? ["", "", ""]
+            }
+            for b in [s.gaze.blinkLeft, s.gaze.blinkRight] {
+                fields.append(b.map { "\($0)" } ?? "")
             }
             fields.append(String(format: "%.6f", s.stimulus.backgroundGray))
             fields.append(String(format: "%.3f", s.stimulus.displacementPoints))

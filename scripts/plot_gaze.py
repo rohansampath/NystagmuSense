@@ -62,6 +62,10 @@ def load_recording(path):
         raise RecordingError(str(e)) from None
     if not data["t_s"]:
         raise RecordingError("recording contains no samples")
+    t = data["t_s"]
+    for i in range(1, len(t)):
+        if not t[i] >= t[i - 1]:
+            raise RecordingError(f"t_s decreases at data row {i + 1}; refusing to reorder data")
     return data
 
 

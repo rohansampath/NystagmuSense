@@ -63,7 +63,8 @@ struct SessionRecorderTests {
         #expect(tracked.count == SessionRecorder.csvColumns.count)
         #expect(missing.count == SessionRecorder.csvColumns.count)
         #expect(tracked[0] == "1.000000" && tracked[2] == "1" && tracked[3] == "0.25")
-        #expect(missing[2] == "0" && missing[3...11].allSatisfy(\.isEmpty))
+        #expect(tracked[12] == "0.1" && tracked[13] == "0.2")   // blink left/right
+        #expect(missing[2] == "0" && missing[3...13].allSatisfy(\.isEmpty))
     }
 
     @Test func exportRejectsEmptyRecording() {

@@ -32,6 +32,7 @@ enum Fixture {
         EyeMovementSample(timestamp: t, isTracked: true,
                           lookAtPoint: [x, 0.02, 0.5],
                           leftEyeDirection: [x, 0, 1],
-                          rightEyeDirection: [x, 0, 1])
+                          rightEyeDirection: [x, 0, 1],
+                          blinkLeft: 0.1, blinkRight: 0.2)
     }
 }

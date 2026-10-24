@@ -29,7 +29,7 @@ function.
 
 | Component | Status |
 |---|---|
-| Menu → 30 s countdown → test navigation | Works (unchanged) |
+| Menu → **Record 10 Seconds** → test screen | Works. The 30 s countdown screen is skipped for Deliverable 1 (`CountdownOverlay` kept, unused) |
 | Moving, fading stripe stimulus | Works. Logic moved to `StimulusEngine`, same appearance |
 | 10 s raw ARKit eye-tracking recording | Implemented, **not yet verified on a physical iPhone** |
 | CSV + JSON export (share sheet / Files app) | Implemented, **not yet verified on device** |
@@ -38,6 +38,8 @@ function.
 | Contrast-sensitivity score | **Removed from the test flow.** "Past Tests" shows only legacy prototype scores |
 
 Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The full research roadmap is in [NYSTAGMUSENSE_PROJECT_SPEC.md](NYSTAGMUSENSE_PROJECT_SPEC.md);
+only Deliverable 1 (10 s recording + export + plot) is implemented.
 
 ## Requirements
 
@@ -45,7 +47,7 @@ Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITE
 - An iPhone/iPad with a TrueDepth (Face ID) front camera. ARKit face tracking
   doesn't run in the Simulator, which can only show the "unsupported device" path.
 - No third-party dependencies. Apple frameworks only: SwiftUI, ARKit, Core Data.
-- Plotting: Python 3.9+ and `matplotlib` (`pip install matplotlib`)
+- Plotting: Python 3.9+ and `matplotlib` (`pip install -r scripts/requirements.txt`)
 
 ## Build and run on an iPhone
 
@@ -59,14 +61,17 @@ Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITE
 
 ## Record 10 seconds
 
-1. Tap **Start Test**. A 30 s countdown runs (put the phone on a stand at a
-   comfortable viewing distance, in portrait, face fully visible).
+1. Put the phone on a stand at a comfortable viewing distance, in portrait, with
+   your face fully visible in good light. Tap **Record 10 Seconds**.
 2. The stripe stimulus appears with a status card at the top. "Starting camera…"
    switches to **Recording 10 s** once the first camera frame arrives. That's
    when the stimulus starts moving and t = 0.
 3. Watch the stripes. The card shows *Face tracked* or *Face not detected* live.
-4. After ~10 s the card shows **Recording saved** with sample count and observed rate.
-   **Cancel** (or leaving the screen) discards the recording.
+4. After ~10 s the stimulus disappears and the card shows **Recording saved** with
+   sample count and observed rate. **Cancel** (or leaving the screen) discards the
+   recording. If the app leaves the foreground mid-recording, it stops and saves the
+   partial data, with the reason in the sidecar's `issues`. Zero tracked samples counts as a
+   failed capture even though the file is saved.
 
 ## Export
 
@@ -78,14 +83,16 @@ Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITE
 ## Plot
 
 ```bash
-pip install matplotlib
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r scripts/requirements.txt
 python3 scripts/plot_gaze.py path/to/NS_20261024-101500_ABCD1234.csv
 # → prints stats, writes NS_..._ABCD1234.png next to the CSV (or --out file.png)
 ```
 
 The plot shows raw, uncalibrated horizontal signals (left/right eye direction x,
 lookAtPoint x) against time, with untracked periods shaded. It doesn't classify
-OKN. Interpret it by eye.
+OKN. Interpret it by eye. It refuses empty, malformed, or time-decreasing files
+rather than reordering or interpolating.
 
 ## CSV format (schema v1)
 
@@ -96,6 +103,7 @@ OKN. Interpret it by eye.
 | `tracked` | 1 if `ARFaceAnchor.isTracked`, else 0 (gaze fields then empty) | – |
 | `lookat_{x,y,z}_m` | `ARFaceAnchor.lookAtPoint`, face-anchor coords | m |
 | `left_dir_{x,y,z}`, `right_dir_{x,y,z}` | unit z-axis of each eye transform, face-anchor coords | unitless |
+| `blink_left`, `blink_right` | `eyeBlinkLeft/Right` blend-shape coefficient, 0 open … 1 closed (not used to reject samples) | – |
 | `stim_bg_gray` | scheduled background grey, sRGB code value 0–1 (not luminance) | – |
 | `stim_displacement_pt` | scheduled cumulative stripe displacement (+ = rightward) | SwiftUI points |
 
@@ -126,5 +134,5 @@ python3 -m unittest discover scripts/tests
   latency aren't measured or compensated.
 - Stimulus speed and stripe size are in screen points, so not physically
   standardised across devices. Screen brightness isn't controlled.
-- Going back from the test screen by swipe lands on the countdown, which restarts.
-  Use the on-screen Done/Cancel buttons instead.
+- The grating isn't shown until the first camera frame arrives (static before
+  that), so the first ~0.5–1 s after tapping is not part of the session.

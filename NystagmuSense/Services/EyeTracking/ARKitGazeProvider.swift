@@ -30,11 +30,15 @@ final class ARKitGazeProvider: NSObject, GazeProvider, ARSessionDelegate {
 
         let cfg = ARFaceTrackingConfiguration()
         cfg.isWorldTrackingEnabled = false
+        cfg.maximumNumberOfTrackedFaces = 1
         session.delegate = self          // delegateQueue nil → main thread
         session.run(cfg, options: [.resetTracking, .removeExistingAnchors])
     }
 
-    func stop() { session.pause() }
+    func stop() {
+        session.pause()
+        session.delegate = nil
+    }
 
     // MARK: - ARSessionDelegate
 
@@ -44,12 +48,21 @@ final class ARKitGazeProvider: NSObject, GazeProvider, ARSessionDelegate {
             onSample?(.untracked(at: frame.timestamp))
             return
         }
+        let left  = Self.direction(of: face.leftEyeTransform)
+        let right = Self.direction(of: face.rightEyeTransform)
+        // Treat non-finite estimates as missing rather than exporting NaN/inf.
+        guard [face.lookAtPoint, left, right].allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.z.isFinite }) else {
+            onSample?(.untracked(at: frame.timestamp))
+            return
+        }
         onSample?(EyeMovementSample(
             timestamp:         frame.timestamp,
             isTracked:         true,
             lookAtPoint:       face.lookAtPoint,
-            leftEyeDirection:  Self.direction(of: face.leftEyeTransform),
-            rightEyeDirection: Self.direction(of: face.rightEyeTransform)
+            leftEyeDirection:  left,
+            rightEyeDirection: right,
+            blinkLeft:         face.blendShapes[.eyeBlinkLeft]?.floatValue,
+            blinkRight:        face.blendShapes[.eyeBlinkRight]?.floatValue
         ))
     }
 

@@ -68,6 +68,8 @@ struct SessionMetadata: Codable, Equatable {
         "right_dir_x": "unit z-axis of rightEyeTransform, face-anchor coordinates, unitless",
         "right_dir_y": "unit z-axis of rightEyeTransform, face-anchor coordinates, unitless",
         "right_dir_z": "unit z-axis of rightEyeTransform, face-anchor coordinates, unitless",
+        "blink_left": "ARFaceAnchor eyeBlinkLeft blend-shape coefficient, 0 (open)..1 (closed); not used to reject samples",
+        "blink_right": "ARFaceAnchor eyeBlinkRight blend-shape coefficient, 0 (open)..1 (closed); not used to reject samples",
         "stim_bg_gray": "scheduled background grey level, sRGB code value 0 (black)..1 (white); not photometric luminance",
         "stim_displacement_pt": "scheduled cumulative stripe displacement, SwiftUI points (+ = rightward on screen)",
     ]

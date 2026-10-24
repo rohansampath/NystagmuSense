@@ -104,6 +104,21 @@ final class TestViewModel: ObservableObject {
         }
     }
 
+    /// App left the foreground: camera capture can't continue honestly, so stop
+    /// now. Data already recorded is saved and marked partial.
+    func appBecameInactive() {
+        switch phase {
+        case .starting:
+            stopCapture()
+            phase = .failed("The app left the foreground before recording started.")
+        case .recording:
+            recorder?.note("App left the foreground; recording is partial.")
+            finish()
+        default:
+            break
+        }
+    }
+
     /// Called when the user leaves early. Discards the partial recording.
     func cancel() {
         guard phase == .starting || phase == .recording else { return }

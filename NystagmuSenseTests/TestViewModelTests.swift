@@ -111,6 +111,29 @@ struct TestViewModelTests {
         #expect(s.issues == [GazeTrackingError.interrupted.localizedDescription])
     }
 
+    @Test func leavingForegroundSavesPartialRecording() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = makeVM(now: 100)
+        vm.start()
+        provider.emit(Fixture.tracked(at: 100.0))
+        vm.appBecameInactive()
+        guard case .finished(let s) = vm.phase else {
+            Issue.record("expected finished, got \(vm.phase)"); return
+        }
+        #expect(s.issues == ["App left the foreground; recording is partial."])
+        #expect(provider.stopCount == 1)
+    }
+
+    @Test func leavingForegroundBeforeFirstFrameFails() {
+        let vm = makeVM()
+        vm.start()
+        vm.appBecameInactive()
+        guard case .failed = vm.phase else {
+            Issue.record("expected failed, got \(vm.phase)"); return
+        }
+        #expect(exportedSessions().isEmpty)
+    }
+
     @Test func fatalErrorDuringRecordingSavesPartialData() throws {
         defer { try? FileManager.default.removeItem(at: outputDir) }
         let vm = makeVM(now: 100)

@@ -17,12 +17,12 @@ struct MenuView: View {
                 Spacer()
                 Button("Past Tests")  { vm.showHistory   = true }
                     .buttonStyle(.borderedProminent)
-                Button("Start Test")  { vm.showCountdown = true }
+                Button("Record 10 Seconds")  { vm.showCountdown = true }
                     .buttonStyle(.bordered)
                 Spacer()
             }
             .navigationDestination(isPresented: $vm.showHistory)   { HistoryView() }
-            .navigationDestination(isPresented: $vm.showCountdown) { CountdownOverlay() }
+            .navigationDestination(isPresented: $vm.showCountdown) { TestView() }
         }
     }
 }

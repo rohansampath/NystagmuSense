@@ -28,7 +28,7 @@ NystagmuSenseTests/           Swift Testing unit tests + MockGazeProvider
 ## Data flow
 
 ```text
-MenuView → CountdownOverlay (30 s) → TestView
+MenuView ("Record 10 Seconds") → TestView        (CountdownOverlay currently unused)
                                         │ owns
                                         ▼
                                  TestViewModel  (coordinator, @MainActor)
@@ -61,6 +61,7 @@ Rules:
 idle ──start()──▶ starting ──first frame──▶ recording ──10 s timer / finish()──▶ finished(summary)
                      │                          │                                └▶ failed (0 samples / write error)
                      ├─ unsupported / permission / startup timeout (5 s) ──▶ failed
+                     ├─ app leaves foreground ─▶ failed  (during recording: finish() with partial data)
                      └─ cancel() (view disappears) ──────────────────────────▶ cancelled (nothing saved)
 ```
 
@@ -99,10 +100,12 @@ idle ──start()──▶ starting ──first frame──▶ recording ──
 | `isTracked` | `ARFaceAnchor.isTracked` (false if no anchor) | bool |
 | `lookAtPoint` | `ARFaceAnchor.lookAtPoint` | m |
 | `left/rightEyeDirection` | normalised z-axis of `left/rightEyeTransform` | unitless |
+| `blinkLeft/Right` | `blendShapes[.eyeBlinkLeft/Right]` | 0 open … 1 closed |
 
 There are no confidence scores (ARKit doesn't provide any) and no angles in degrees
-(no calibration yet). Untracked frames keep their timestamp but have nil
-measurements, so stale values never get exported. The CSV schema is documented
+(no calibration yet). Untracked frames, and frames with non-finite estimates, keep
+their timestamp but have nil measurements, so stale or NaN values never get exported.
+Blink coefficients are exported but don't affect validity. The CSV schema is documented
 in each sidecar's `columns` key and in the README.
 
 > The previous implementation recorded `eyeTransform.columns.3`, which is the

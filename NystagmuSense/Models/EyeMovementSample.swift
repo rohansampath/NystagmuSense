@@ -31,6 +31,11 @@ struct EyeMovementSample: Codable, Equatable {
     let leftEyeDirection: SIMD3<Float>?
     let rightEyeDirection: SIMD3<Float>?
 
+    /// `eyeBlinkLeft` / `eyeBlinkRight` blend-shape coefficients, 0 (open) … 1 (closed).
+    /// Exported as-is; not used to reject samples.
+    var blinkLeft: Float? = nil
+    var blinkRight: Float? = nil
+
     static func untracked(at timestamp: TimeInterval) -> EyeMovementSample {
         EyeMovementSample(timestamp: timestamp, isTracked: false,
                           lookAtPoint: nil, leftEyeDirection: nil, rightEyeDirection: nil)
