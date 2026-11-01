@@ -2,8 +2,7 @@
 //  StimulusConfig.swift
 //  NystagmuSense
 //
-//  Parameters of the moving-stripe stimulus. Defaults reproduce the
-//  original FadingStripeView exactly.
+//  Parameters of the moving-stripe stimulus.
 //
 
 import Foundation
@@ -20,4 +19,35 @@ struct StimulusConfig: Codable, Equatable {
     var direction: Direction = .rightward
     /// Seconds for the background to fade white → black (then back).
     var fadeHalfCycleSeconds: Double = 30
+    /// A fixed background keeps contrast visible throughout capture. Nil enables
+    /// the legacy white → black fade for explicitly configured experiments.
+    var fixedBackgroundGray: Double? = 0
+    var stripeGray: Double = 1
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case stripeWidthRatio, pitchToWidthRatio, speedPointsPerSecond, direction
+        case fadeHalfCycleSeconds, fixedBackgroundGray, stripeGray
+    }
+
+    /// Old sidecars describe black stripes over a fading background.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        stripeWidthRatio = try c.decode(Double.self, forKey: .stripeWidthRatio)
+        pitchToWidthRatio = try c.decode(Double.self, forKey: .pitchToWidthRatio)
+        speedPointsPerSecond = try c.decode(Double.self, forKey: .speedPointsPerSecond)
+        direction = try c.decode(Direction.self, forKey: .direction)
+        fadeHalfCycleSeconds = try c.decode(Double.self, forKey: .fadeHalfCycleSeconds)
+        fixedBackgroundGray = try c.decodeIfPresent(Double.self, forKey: .fixedBackgroundGray)
+        stripeGray = try c.decodeIfPresent(Double.self, forKey: .stripeGray) ?? 0
+    }
+}
+
+/// Full stimulus surface in SwiftUI points, saved to reproduce stripe geometry.
+struct StimulusViewport: Codable, Equatable {
+    let widthPoints: Double
+    let heightPoints: Double
+
+    var isLandscape: Bool { widthPoints > heightPoints && heightPoints > 0 }
 }

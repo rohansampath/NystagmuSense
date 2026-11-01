@@ -17,19 +17,23 @@ struct FadingStripeView: View {
     let startTime: TimeInterval?
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 120.0)) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / 120.0, paused: startTime == nil)) { timeline in
+            // Read the timeline outside Canvas so its drawing closure receives a
+            // new value every frame. Map the scheduled date to the uptime clock
+            // shared by the recorder (rather than accumulating frame deltas).
+            let uptime = CACurrentMediaTime() + timeline.date.timeIntervalSinceNow
+            let elapsed = startTime.map { max(0, uptime - $0) } ?? 0
+            let snapshot = engine.snapshot(at: elapsed)
             Canvas { ctx, size in
-                let elapsed = startTime.map { CACurrentMediaTime() - $0 } ?? 0
-
                 // 1. Background
                 ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                         with: .color(Color(white: engine.backgroundGray(at: elapsed))))
+                         with: .color(Color(white: snapshot.backgroundGray)))
 
                 // 2. Stripes
                 let w = engine.stripeWidth(viewWidth: size.width)
                 for x in engine.stripePositions(at: elapsed, viewWidth: size.width) {
                     ctx.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
-                             with: .color(.black))
+                             with: .color(Color(white: engine.config.stripeGray)))
                 }
             }
         }
