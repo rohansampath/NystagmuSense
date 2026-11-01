@@ -23,11 +23,11 @@ struct FadingStripeView: View {
             // shared by the recorder (rather than accumulating frame deltas).
             let uptime = CACurrentMediaTime() + timeline.date.timeIntervalSinceNow
             let elapsed = startTime.map { max(0, uptime - $0) } ?? 0
-            let snapshot = engine.snapshot(at: elapsed)
+            let background = engine.backgroundGray(at: elapsed)
             Canvas { ctx, size in
                 // 1. Background
                 ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                         with: .color(Color(white: snapshot.backgroundGray)))
+                         with: .color(Color(white: background)))
 
                 // 2. Stripes
                 let w = engine.stripeWidth(viewWidth: size.width)

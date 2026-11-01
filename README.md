@@ -65,15 +65,21 @@ only Deliverable 1 (10 s recording + export + plot) is implemented.
    won't rotate, turn off Portrait Orientation Lock. **Start Recording** stays
    disabled until the app is displayed in landscape.
 2. Keep your face fully visible to the front camera in good light, then tap
-   **Start Recording**. The camera waits for a tracked face before the stimulus
-   and recording clock start together.
+   **Start Recording**. The first time, iOS asks for camera access; this doesn't
+   fail the session. From Start until the session ends, the screen is locked to the
+   landscape side you're holding, so it can't rotate mid-trial. The static
+   stimulus frame is already showing, and once a face is tracked the stimulus starts
+   moving and the recording clock starts together.
 3. Keep your head still and watch the white vertical bars move rightward over a
    fixed black background (90 SwiftUI points/s). The compact status card shows
    face-tracking status while leaving most of the stimulus visible.
 4. After ~10 s, the stimulus disappears and **Recording saved** shows sample count
    and observed rate. Rotating or resizing the stimulus surface, or leaving the
    foreground, stops capture and saves partial data with a reason in `issues`.
-   **Cancel** discards the recording. Failed exports offer **Retry Export**.
+   **Cancel** discards the recording. Failed exports offer **Retry Export**; other
+   failures (no camera frames within 5 s, no face found within 5 s of the first
+   frame, camera denied) offer **Try Again**. Backgrounding the app before a face
+   is found returns to the Ready state.
 
 The sidecar records the full stimulus surface size (`stimulusViewport`, in
 points) and stripe/background grey levels, alongside speed, direction and spacing.
@@ -106,7 +112,15 @@ OKN. Interpret it by eye. It refuses empty, malformed, or time-decreasing files
 rather than reordering or interpolating, and exits with an error (no PNG) if no sample
 has a tracked face.
 
-## CSV format (schema v1)
+## CSV format (schema v2)
+
+`schemaVersion` in the sidecar tells recordings apart:
+
+- **v1** (`trials/trackingtest1`–`2`): black bars on a white→black fading
+  background, so `stim_bg_gray` changes over time.
+- **v2**: the sidecar adds `stimulusViewport`, `stimulus.fixedBackgroundGray` and
+  `stimulus.stripeGray`. The default stimulus is white bars on a constant black
+  background, so `stim_bg_gray` is constant (0). CSV columns are unchanged.
 
 | column | meaning | units |
 |---|---|---|

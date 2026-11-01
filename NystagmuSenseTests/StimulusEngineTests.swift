@@ -98,4 +98,14 @@ struct StimulusEngineTests {
         let first = e.stripePositions(at: 1.234, viewWidth: 400).first!
         #expect(first >= -3 * p && first < -2 * p)
     }
+
+    @Test func instructionFollowsConfiguredStimulus() {
+        #expect(StimulusConfig().participantInstruction
+                == "Keep your head still and watch the white bars move to the right.")
+        var cfg = StimulusConfig()
+        cfg.direction = .leftward
+        cfg.stripeGray = 0
+        #expect(cfg.participantInstruction
+                == "Keep your head still and watch the black bars move to the left.")
+    }
 }
