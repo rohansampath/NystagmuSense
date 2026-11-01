@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct NystagmuSenseApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var persistence = PersistenceController.shared
     @StateObject private var menuVM      = MenuViewModel()
 
