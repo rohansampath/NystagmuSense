@@ -28,6 +28,7 @@ struct RecordingStatusCard: View {
                 Label(isLandscape ? "Ready to record" : "Rotate your phone sideways",
                       systemImage: "iphone.gen3.landscape")
                     .font(.headline)
+                Text(stimulus.trialMode.displayName).foregroundStyle(.secondary)
                 Text(isLandscape
                      ? stimulus.participantInstruction
                      : "Landscape mode is required. If the screen won't rotate, turn off Portrait Orientation Lock.")
@@ -44,6 +45,7 @@ struct RecordingStatusCard: View {
             case .recording:
                 HStack(spacing: 16) {
                     Text("Recording \(Int(duration)) s").font(.headline)
+                    Text(stimulus.trialMode.displayName)
                     Label(faceTracked ? "Face tracked" : "Face not detected",
                           systemImage: faceTracked ? "eye" : "eye.slash")
                         .foregroundStyle(faceTracked ? .green : .red)

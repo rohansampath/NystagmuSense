@@ -17,12 +17,17 @@ struct MenuView: View {
                 Spacer()
                 Button("Past Tests")  { vm.showHistory   = true }
                     .buttonStyle(.borderedProminent)
-                Button("Record 10 Seconds")  { vm.showCountdown = true }
+                Button("Record 10 Seconds")  { vm.startRecording(.okn) }
                     .buttonStyle(.bordered)
+                VStack(spacing: 12) {
+                    Button("Control: Dot + Moving Stripes") { vm.startRecording(.fixationMovingStripes) }
+                    Button("Control: Dot + Still Stripes")  { vm.startRecording(.fixationStillStripes) }
+                }
+                .buttonStyle(.bordered)
                 Spacer()
             }
             .navigationDestination(isPresented: $vm.showHistory)   { HistoryView() }
-            .navigationDestination(isPresented: $vm.showCountdown) { TestView() }
+            .navigationDestination(isPresented: $vm.showCountdown) { TestView(mode: vm.trialMode) }
         }
     }
 }

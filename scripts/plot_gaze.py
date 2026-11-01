@@ -134,8 +134,18 @@ def load_sidecar(csv_path):
         return None
 
 
+def trial_mode(meta):
+    """Trial mode from the sidecar (schema 3+); a missing sidecar or mode means okn."""
+    return ((meta or {}).get("stimulus") or {}).get("trialMode") or "okn"
+
+
+def plot_title(name, meta):
+    return f"{name} · mode: {trial_mode(meta)}"
+
+
 def print_stats(path, stats, meta):
     print(f"Recording: {path}")
+    print(f"  mode:          {trial_mode(meta)}")
     if meta:
         dev = meta.get("device", {})
         print(f"  device:        {dev.get('model', '?')} ({dev.get('systemName', '')} {dev.get('systemVersion', '')})")
@@ -198,11 +208,12 @@ def main(argv=None):
     try:
         data = load_recording(args.csv)
         stats = compute_stats(data)
-        print_stats(args.csv, stats, load_sidecar(args.csv))
+        meta = load_sidecar(args.csv)
+        print_stats(args.csv, stats, meta)
         if stats["tracked"] == 0:
             raise RecordingError("no samples have a tracked face; nothing to plot (failed capture)")
         out = args.out or str(Path(args.csv).with_suffix(".png"))
-        plot(data, out, Path(args.csv).name, show=args.show)
+        plot(data, out, plot_title(Path(args.csv).name, meta), show=args.show)
     except RecordingError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

@@ -32,12 +32,33 @@ struct DeviceInfo: Codable, Equatable {
     }
 }
 
+/// Where the fixation dot was drawn, SwiftUI points in the stimulus viewport
+/// (origin top-left, same frame as `stimulusViewport`).
+struct FixationDot: Codable, Equatable {
+    let centerXPoints: Double
+    let centerYPoints: Double
+    let diameterPoints: Double
+    let outlinePoints: Double
+
+    /// Nil when the trial mode has no dot.
+    init?(stimulus: StimulusEngine, viewport: StimulusViewport) {
+        let size = CGSize(width: viewport.widthPoints, height: viewport.heightPoints)
+        guard let rect = stimulus.fixationDotRect(in: size) else { return nil }
+        centerXPoints  = Double(rect.midX)
+        centerYPoints  = Double(rect.midY)
+        diameterPoints = Double(rect.width)
+        outlinePoints  = StimulusConfig.fixationDotOutlinePoints
+    }
+}
+
 struct SessionMetadata: Codable, Equatable {
     /// 1: black bars on a fading background (trials/trackingtest1–2).
     /// 2: adds stimulusViewport and stimulus.fixedBackgroundGray/stripeGray.
     ///    Stimulus settings describe each session: earlier v2 recordings used
     ///    a fixed background; the current default uses a ten-second fade.
-    var schemaVersion = 2
+    /// 3: adds stimulus.trialMode and fixationDot (control trials); the mode is
+    ///    also the file-name suffix (_okn / _fixmove / _fixstill).
+    var schemaVersion = 3
     let sessionID: UUID
     let startedAt: Date
     let device: DeviceInfo
@@ -51,8 +72,12 @@ struct SessionMetadata: Codable, Equatable {
     let stimulus: StimulusConfig
     let issues: [String]
     var stimulusViewport: StimulusViewport? = nil
+    /// Present only in fixation-control trials.
+    var fixationDot: FixationDot? = nil
     var gazeSource = "ARKit ARFaceTrackingConfiguration (TrueDepth)"
     var columns = SessionMetadata.columnDescriptions
+    /// Optional so sidecars written before schema 3 still decode.
+    var fields: [String: String]? = SessionMetadata.fieldDescriptions
     var timingNotes = """
         t_s = ARFrame.timestamp - session start, both on the system-uptime clock. \
         Session start is when the first tracked camera frame was received; the stimulus animation \
@@ -78,6 +103,14 @@ struct SessionMetadata: Codable, Equatable {
         "blink_right": "ARFaceAnchor eyeBlinkRight blend-shape coefficient, 0 (open)..1 (closed); not used to reject samples",
         "stim_bg_gray": "scheduled background grey level, sRGB code value 0 (black)..1 (white); not photometric luminance",
         "stim_displacement_pt": "scheduled cumulative stripe displacement, SwiftUI points (+ = rightward on screen)",
+    ]
+
+    /// Non-CSV sidecar fields that need explaining (schema 3+).
+    static let fieldDescriptions: [String: String] = [
+        "stimulus.trialMode": "okn (moving stripes), fixationMovingStripes (same moving stripes + centred red dot), "
+            + "fixationStillStripes (same stripes, speed 0, + dot); missing in older sidecars means okn",
+        "fixationDot": "fixation-control trials only: dot centre and diameter in SwiftUI points within "
+            + "stimulusViewport (origin top-left), solid red with a dark outline of outlinePoints; never moves",
     ]
 
     static let encoder: JSONEncoder = {

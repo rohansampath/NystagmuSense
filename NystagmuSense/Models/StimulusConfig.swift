@@ -10,6 +10,37 @@ import Foundation
 struct StimulusConfig: Codable, Equatable {
     enum Direction: String, Codable { case rightward, leftward }
 
+    /// Which trial is recorded. The fixation modes are controls for OKN trials:
+    /// the subject holds gaze on a centred red dot drawn over the stripes.
+    enum TrialMode: String, Codable, CaseIterable {
+        case okn                    // moving stripes, no dot (default)
+        case fixationMovingStripes  // same moving stripes + dot: how much OKN breaks through
+        case fixationStillStripes   // same stripes, never moving + dot: still-eye baseline
+
+        var showsFixationDot: Bool { self != .okn }
+
+        /// Suffix for exported file names.
+        var fileSuffix: String {
+            switch self {
+            case .okn:                   return "okn"
+            case .fixationMovingStripes: return "fixmove"
+            case .fixationStillStripes:  return "fixstill"
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .okn:                   return "OKN: moving stripes"
+            case .fixationMovingStripes: return "Control: dot + moving stripes"
+            case .fixationStillStripes:  return "Control: dot + still stripes"
+            }
+        }
+    }
+
+    /// Fixation dot geometry, SwiftUI points. Fixed for all fixation trials.
+    static let fixationDotDiameterPoints: Double = 12
+    static let fixationDotOutlinePoints: Double = 1.5
+
     /// Stripe width as a fraction of the view width (min 1 pt).
     var stripeWidthRatio: Double = 0.02
     /// Stripe pitch (period) as a multiple of the stripe width.
@@ -25,12 +56,19 @@ struct StimulusConfig: Codable, Equatable {
     var fixedBackgroundGray: Double? = nil
     /// Black bars match the white → black background fade in the paper.
     var stripeGray: Double = 0
+    var trialMode: TrialMode = .okn
 
     init() {}
 
+    /// Default stimulus for `mode`. Still-stripe trials record speed 0.
+    init(mode: TrialMode) {
+        trialMode = mode
+        if mode == .fixationStillStripes { speedPointsPerSecond = 0 }
+    }
+
     private enum CodingKeys: String, CodingKey {
         case stripeWidthRatio, pitchToWidthRatio, speedPointsPerSecond, direction
-        case fadeHalfCycleSeconds, fixedBackgroundGray, stripeGray
+        case fadeHalfCycleSeconds, fixedBackgroundGray, stripeGray, trialMode
     }
 
     /// Old sidecars describe black stripes over a fading background.
@@ -43,12 +81,17 @@ struct StimulusConfig: Codable, Equatable {
         fadeHalfCycleSeconds = try c.decode(Double.self, forKey: .fadeHalfCycleSeconds)
         fixedBackgroundGray = try c.decodeIfPresent(Double.self, forKey: .fixedBackgroundGray)
         stripeGray = try c.decodeIfPresent(Double.self, forKey: .stripeGray) ?? 0
+        // Sidecars before schema 3 were all OKN trials.
+        trialMode = try c.decodeIfPresent(TrialMode.self, forKey: .trialMode) ?? .okn
     }
 }
 
 extension StimulusConfig {
     /// What the participant is told to watch, derived from the configured stimulus.
     var participantInstruction: String {
+        if trialMode.showsFixationDot {
+            return "Keep your head still and keep looking at the red dot."
+        }
         let bars: String
         switch stripeGray {
         case 0.9...:  bars = "white"

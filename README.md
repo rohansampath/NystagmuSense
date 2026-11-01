@@ -106,10 +106,29 @@ or a calibrated contrast threshold.
 These changes support repeatable data collection. OKN detection is available
 offline in Python; it is not enabled in the iOS app.
 
+## Fixation-control trials
+
+Two extra menu buttons run the same 10 s flow (landscape, start on the first
+tracked frame, status card, export, cancel, retry) with a control stimulus. In
+both, the subject keeps looking at a solid **red dot** (12 pt diameter, 1.5 pt dark
+outline) fixed at the exact centre of the screen, drawn over the stripes for the
+whole trial:
+
+| Button | `stimulus.trialMode` | File suffix | Stripes | What it's for |
+|---|---|---|---|---|
+| **Record 10 Seconds** | `okn` | `_okn` | moving, no dot (unchanged) | the OKN trial |
+| **Control: Dot + Moving Stripes** | `fixationMovingStripes` | `_fixmove` | same stripes and motion as `okn` | how much OKN breaks through while holding gaze on a fixed target |
+| **Control: Dot + Still Stripes** | `fixationStillStripes` | `_fixstill` | same stripes, speed 0 (`stim_displacement_pt` stays 0) | baseline for what a still eye looks like to ARKit |
+
+The status card shows the mode name while recording. `scripts/plot_gaze.py` and
+`scripts/detect_okn.py` print the mode and add it to plot titles (`okn` if the
+sidecar has none). Detection logic is the same for every mode.
+
 ## Export
 
 - Tap **Export** on the result card to AirDrop, Save to Files, email, etc.
-  (sends `NS_<date>_<id>.csv` and `.json`), **or**
+  (sends `NS_<date>_<id>_<mode>.csv` and `.json`, mode = `okn`, `fixmove` or
+  `fixstill`; recordings before schema 3 have no mode suffix), **or**
 - open *Files › On My iPhone › NystagmuSense › Recordings/*, **or**
 - in Finder, select the iPhone › Files › NystagmuSense.
 
@@ -233,7 +252,7 @@ is kept only for historical results and remains disconnected. Even reproducing
 `log10(mean(background values))` would yield an experimental project index,
 not a calibrated CSF or a clinically validated result.
 
-## CSV format (schema v2)
+## CSV format (schema v3)
 
 `schemaVersion` in the sidecar tells recordings apart:
 
@@ -244,6 +263,12 @@ not a calibrated CSF or a clinically validated result.
   current default uses black bars, a white → black fade over ten seconds, and
   126 pt/s motion. Read the saved stimulus settings for each session rather than
   inferring appearance from schema version. CSV columns are unchanged.
+- **v3**: the sidecar adds `stimulus.trialMode` (`okn`, `fixationMovingStripes`,
+  `fixationStillStripes`; missing means `okn`) and, in fixation trials only,
+  `fixationDot` (`centerXPoints`, `centerYPoints`, `diameterPoints`,
+  `outlinePoints`, in SwiftUI points within `stimulusViewport`, origin top-left).
+  A `fields` key describes these. Still-stripe trials record
+  `speedPointsPerSecond` 0. CSV columns are unchanged.
 
 | column | meaning | units |
 |---|---|---|

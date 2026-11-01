@@ -8,9 +8,14 @@
 import SwiftUI
 
 struct TestView: View {
-    @StateObject private var vm = TestViewModel()
+    @StateObject private var vm: TestViewModel
     @EnvironmentObject private var menu: MenuViewModel
     @Environment(\.scenePhase) private var scenePhase
+
+    init(mode: StimulusConfig.TrialMode = .okn) {
+        _vm = StateObject(wrappedValue:
+            TestViewModel(stimulus: StimulusEngine(config: StimulusConfig(mode: mode))))
+    }
 
     var body: some View {
         GeometryReader { geometry in

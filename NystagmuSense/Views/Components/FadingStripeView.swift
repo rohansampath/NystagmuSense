@@ -35,6 +35,15 @@ struct FadingStripeView: View {
                     ctx.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
                              with: .color(Color(white: engine.config.stripeGray)))
                 }
+
+                // 3. Fixation dot (control trials): on top, centred, never moves.
+                //    The dark outline keeps it visible over white stripes too.
+                if let dot = engine.fixationDotRect(in: size) {
+                    let circle = Path(ellipseIn: dot)
+                    ctx.fill(circle, with: .color(.red))
+                    ctx.stroke(circle, with: .color(Color(white: 0.1)),
+                               lineWidth: CGFloat(StimulusConfig.fixationDotOutlinePoints))
+                }
             }
         }
         .ignoresSafeArea()

@@ -136,7 +136,8 @@ struct SessionRecorder {
             observedSampleRateHz: observedSampleRate,
             stimulus: stimulus.config,
             issues: issues,
-            stimulusViewport: viewport
+            stimulusViewport: viewport,
+            fixationDot: viewport.flatMap { FixationDot(stimulus: stimulus, viewport: $0) }
         )
     }
 
@@ -144,7 +145,7 @@ struct SessionRecorder {
     func export(to baseDirectory: URL, device: DeviceInfo) throws -> RecordingFiles {
         guard !samples.isEmpty else { throw RecordingError.noSamples }
 
-        let stem = Self.fileStem(startedAt: startedAt, sessionID: sessionID)
+        let stem = Self.fileStem(startedAt: startedAt, sessionID: sessionID, mode: stimulus.config.trialMode)
         let dir  = baseDirectory.appendingPathComponent(stem, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
@@ -155,11 +156,12 @@ struct SessionRecorder {
         return RecordingFiles(directory: dir, csv: csvURL, metadata: jsonURL)
     }
 
-    static func fileStem(startedAt: Date, sessionID: UUID) -> String {
+    /// `NS_<date>_<id>_<mode>`, e.g. `NS_20261101-132525_5E5CDC71_fixstill`.
+    static func fileStem(startedAt: Date, sessionID: UUID, mode: StimulusConfig.TrialMode) -> String {
         let f = DateFormatter()
         f.locale     = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyyMMdd-HHmmss"
-        return "NS_\(f.string(from: startedAt))_\(sessionID.uuidString.prefix(8))"
+        return "NS_\(f.string(from: startedAt))_\(sessionID.uuidString.prefix(8))_\(mode.fileSuffix)"
     }
 
     /// Documents/Recordings — visible in the Files app (UIFileSharingEnabled).
