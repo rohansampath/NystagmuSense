@@ -12,8 +12,8 @@ ARKit signals:
    left. THIS SIGN CONVENTION IS UNVERIFIED ON DEVICE.
 2. Invalid samples: tracked != 1, non-finite angle, or blink > threshold,
    padded in time on both sides.
-3. Velocity: Savitzky-Golay first derivative, applied separately to each
-   contiguous valid run (never across gaps).
+3. Velocity: local polynomial first derivative using actual timestamps
+   (Savitzky-Golay on uniform data), separately per contiguous valid run.
 4. Fast phases: runs where |velocity| exceeds a threshold; nearby same-direction
    runs are merged.
 5. Slow phases: valid segments between fast phases; velocity = slope of a
@@ -39,6 +39,7 @@ from scipy.signal import savgol_filter
 REQUIRED = ["t_s", "tracked", "left_dir_x", "left_dir_z", "right_dir_x", "right_dir_z"]
 OPTIONAL = ["blink_left", "blink_right", "stim_displacement_pt"]
 SIGN_CAVEAT = "eye-angle sign convention (+ = subject's right) is UNVERIFIED on device"
+GAP_FACTOR = 2.5  # same missing-frame boundary as plot_gaze.py
 
 
 @dataclass
@@ -62,6 +63,26 @@ class SessionError(Exception):
     pass
 
 
+def validate_params(p):
+    for f in fields(p):
+        value = getattr(p, f.name)
+        if not math.isfinite(value):
+            raise SessionError(f"{f.name} must be finite")
+    if not (isinstance(p.sg_window, int) and isinstance(p.sg_polyorder, int)
+            and p.sg_polyorder >= 1 and p.sg_window > p.sg_polyorder and p.sg_window % 2 == 1):
+        raise SessionError("sg_window must be odd and greater than sg_polyorder >= 1")
+    for name in ("fast_threshold", "min_slow_s", "min_slow_velocity", "window_s", "step_s"):
+        if getattr(p, name) <= 0:
+            raise SessionError(f"{name} must be positive")
+    for name in ("pad_ms", "merge_gap_ms", "beat_max_gap_s"):
+        if getattr(p, name) < 0:
+            raise SessionError(f"{name} must be nonnegative")
+    if not isinstance(p.min_beats, int) or p.min_beats < 1:
+        raise SessionError("min_beats must be a positive integer")
+    if not 0 <= p.blink_threshold <= 1 or not 0.5 < p.min_agreement <= 1:
+        raise SessionError("blink_threshold must be in [0, 1] and min_agreement in (0.5, 1]")
+
+
 # ---------------------------------------------------------------- loading
 
 def load_session(path):
@@ -70,12 +91,16 @@ def load_session(path):
         with open(path, newline="") as f:
             reader = csv.DictReader(f)
             header = reader.fieldnames or []
+            if len(header) != len(set(header)):
+                raise SessionError("duplicate CSV column names")
             missing = [c for c in REQUIRED if c not in header]
             if missing:
                 raise SessionError(f"missing required column(s): {', '.join(missing)}")
             cols = REQUIRED + [c for c in OPTIONAL if c in header]
             rows = {c: [] for c in cols}
             for line_no, row in enumerate(reader, start=2):
+                if None in row or any(value is None for value in row.values()):
+                    raise SessionError(f"line {line_no}: wrong number of CSV fields")
                 for c in cols:
                     value = (row[c] or "").strip()
                     try:
@@ -104,9 +129,13 @@ def eye_angle(data):
 
 def valid_mask(t, angle, data, p):
     bad = (data["tracked"] != 1) | ~np.isfinite(angle)
-    if "blink_left" in data and "blink_right" in data:
-        with np.errstate(invalid="ignore"):
-            bad |= np.fmax(data["blink_left"], data["blink_right"]) > p.blink_threshold
+    # atan2(inf, z) and atan2(0, 0) are finite, but neither is usable gaze.
+    for eye in ("left", "right"):
+        x, z = data[f"{eye}_dir_x"], data[f"{eye}_dir_z"]
+        bad |= ~np.isfinite(x) | ~np.isfinite(z) | (np.hypot(x, z) < 1e-8)
+        blink = data.get(f"blink_{eye}")
+        if blink is not None:
+            bad |= ~np.isfinite(blink) | (blink < 0) | (blink > p.blink_threshold)
     # Pad each invalid sample by pad_ms on both sides.
     pad = p.pad_ms / 1000
     padded = bad.copy()
@@ -124,12 +153,40 @@ def runs(mask):
     return list(zip(edges[::2], edges[1::2]))
 
 
-def sg_velocity(angle, valid, dt, p):
-    """SG first derivative per valid run; NaN where invalid or a run is too short."""
-    vel = np.full_like(angle, np.nan)
+def continuous_runs(t, valid, dt):
+    """Split on invalid rows AND absent frames; no event may cross a split."""
+    gaps = np.flatnonzero(np.diff(t) > GAP_FACTOR * dt) + 1
     for a, b in runs(valid):
+        cuts = [a, *gaps[(gaps > a) & (gaps < b)], b]
+        yield from zip(cuts, cuts[1:])
+
+
+def sg_velocity(angle, valid, dt, p, t=None):
+    """Local polynomial derivative; actual times handle camera sampling jitter.
+
+    Uniformly spaced samples use SciPy's equivalent SG filter. On irregular
+    samples, fit the same polynomial/window at the measured timestamps instead
+    of assigning every interval the median dt. Never interpolate across gaps.
+    """
+    vel = np.full_like(angle, np.nan)
+    if t is None:
+        t = np.arange(len(angle)) * dt
+    for a, b in continuous_runs(t, valid, dt):
         if b - a >= p.sg_window:
-            vel[a:b] = savgol_filter(angle[a:b], p.sg_window, p.sg_polyorder, deriv=1, delta=dt)
+            intervals = np.diff(t[a:b])
+            if np.allclose(intervals, intervals[0], rtol=1e-6, atol=1e-10):
+                vel[a:b] = savgol_filter(angle[a:b], p.sg_window, p.sg_polyorder,
+                                        deriv=1, delta=float(intervals[0]))
+            else:
+                half = p.sg_window // 2
+                for i in range(a, b):
+                    start = min(max(a, i - half), b - p.sg_window)
+                    end = start + p.sg_window
+                    # Scale to nominal frame units to condition the fit; the
+                    # linear coefficient / dt is the derivative in deg/s.
+                    x = (t[start:end] - t[i]) / dt
+                    coef = np.polynomial.polynomial.polyfit(x, angle[start:end], p.sg_polyorder)
+                    vel[i] = coef[1] / dt
     return vel
 
 
@@ -162,6 +219,9 @@ def detect_fast_phases(t, angle, vel, valid, p):
 
 
 def detect_slow_phases(t, angle, valid, fast_phases, p):
+    # A line-fit slope is only a candidate drift estimate. In particular, a
+    # voluntary movement/settling artifact may fit here; no fit-quality or
+    # stimulus-locking validation has been established on labelled recordings.
     in_fast = np.zeros(len(t), dtype=bool)
     for f in fast_phases:
         in_fast[f["i0"]:f["i1"]] = True
@@ -190,38 +250,42 @@ def detect_beats(slow_phases, fast_phases, p):
             if f["direction"] == -direction:
                 beats.append(dict(time=f["start"], direction=direction,
                                   slow_velocity=s["velocity"], slow=s, fast=f))
-                break
+            # Only the immediately following fast phase can reset this slow
+            # phase; do not skip an intervening same-direction movement.
+            break
     return beats
 
 
 # ---------------------------------------------------------------- 7–8: windows
 
 def okn_windows(t, beats, p):
-    """Sliding windows with enough direction-consistent beats."""
+    """Window support for direction-consistent beats, not physiological onset/offset."""
     positive = []
     last_start = max(t[0], t[-1] - p.window_s)   # one window if the recording is short
-    for start in np.arange(t[0], last_start + 1e-9, p.step_s):
-        end = start + p.window_s
-        dirs = [b["direction"] for b in beats if start <= b["time"] < end]
+    starts = list(np.arange(t[0], last_start + 1e-9, p.step_s))
+    if last_start - starts[-1] > 1e-9:
+        starts.append(last_start)  # cover a tail not aligned to step_s
+    for start in starts:
+        end = min(start + p.window_s, t[-1])
+        dirs = [b["direction"] for b in beats if start <= b["time"] <= end]
         if len(dirs) >= p.min_beats:
             agree = max(dirs.count(1), dirs.count(-1)) / len(dirs)
             if agree >= p.min_agreement:
-                positive.append((float(start), float(end)))
+                direction = 1 if dirs.count(1) > dirs.count(-1) else -1
+                positive.append((float(start), float(end), direction))
     return positive
 
 
 def merge_windows(windows, beats):
     intervals = []
-    for a, b in windows:
-        if intervals and a <= intervals[-1][1]:
+    for a, b, direction in windows:
+        if intervals and direction == intervals[-1][2] and a <= intervals[-1][1]:
             intervals[-1][1] = max(intervals[-1][1], b)
         else:
-            intervals.append([a, b])
+            intervals.append([a, b, direction])
     out = []
-    for a, b in intervals:
-        inside = [x for x in beats if a <= x["time"] < b]
-        dirs = [x["direction"] for x in inside]
-        direction = 1 if dirs.count(1) >= dirs.count(-1) else -1
+    for a, b, direction in intervals:
+        inside = [x for x in beats if a <= x["time"] <= b and x["direction"] == direction]
         out.append(dict(onset=a, offset=b, beats=len(inside), direction=direction,
                         median_slow_velocity=float(np.median([x["slow_velocity"] for x in inside]))))
     return out
@@ -232,28 +296,51 @@ def stimulus_direction(data):
     if d is None or np.sum(np.isfinite(d)) < 2:
         return 0
     d = d[np.isfinite(d)]
-    return int(np.sign(d[-1] - d[0]))
+    signs = set(np.sign(np.diff(d))) - {0}
+    # A net displacement is misleading for a reversing stimulus. Do not claim
+    # direction agreement without a time-resolved comparison in that case.
+    return int(signs.pop()) if len(signs) == 1 else 0
 
 
 # ---------------------------------------------------------------- driver
 
 def analyse(data, p):
+    validate_params(p)
     t = data["t_s"]
+    if len(t) < 2 or not np.all(np.isfinite(t)) or np.any(np.diff(t) <= 0):
+        raise SessionError("need at least 2 finite, strictly increasing timestamps")
     dt = float(np.median(np.diff(t)))
     angle = eye_angle(data)
     valid = valid_mask(t, angle, data, p)
-    vel = sg_velocity(angle, valid, dt, p)
-    fast = detect_fast_phases(t, angle, vel, valid, p)
-    slow = detect_slow_phases(t, angle, valid, fast, p)
-    beats = detect_beats(slow, fast, p)
-    windows = okn_windows(t, beats, p)
+    vel = sg_velocity(angle, valid, dt, p, t=t)
+    fast, slow, beats, windows, intervals = [], [], [], [], []
+    # Segment the ENTIRE pipeline, not just filtering. A blink or missing frame
+    # must also break slow/fast pairing, beat counts, and candidate intervals.
+    for a, b in continuous_runs(t, valid, dt):
+        if b - a < p.sg_window:
+            continue
+        ts, angles, velocities = t[a:b], angle[a:b], vel[a:b]
+        mask = np.ones(b - a, dtype=bool)
+        fs = detect_fast_phases(ts, angles, velocities, mask, p)
+        ss = detect_slow_phases(ts, angles, mask, fs, p)
+        bs = detect_beats(ss, fs, p)
+        ws = okn_windows(ts, bs, p)
+        intervals.extend(merge_windows(ws, bs))
+        # Exposed indices continue to refer to the original recording.
+        for f in fs:
+            f["i0"] += a
+            f["i1"] += a
+        fast.extend(fs)
+        slow.extend(ss)
+        beats.extend(bs)
+        windows.extend(ws)
     return dict(t=t, dt=dt, angle=angle, valid=valid, velocity=vel, fast=fast, slow=slow,
-                beats=beats, windows=windows, intervals=merge_windows(windows, beats),
+                beats=beats, windows=windows, intervals=intervals,
                 stimulus=stimulus_direction(data))
 
 
 def direction_name(d):
-    return {1: "rightward", -1: "leftward"}.get(d, "unknown/static")
+    return {1: "rightward", -1: "leftward"}.get(d, "unknown/static/reversing")
 
 
 def print_report(r, p):
@@ -263,7 +350,7 @@ def print_report(r, p):
     print(f"samples:           {len(t)}")
     print(f"valid:             {100 * valid.mean():.1f}%")
     print(f"dt (median):       {1000 * r['dt']:.2f} ms")
-    print(f"SG window:         {p.sg_window} samples ({1000 * p.sg_window * r['dt']:.0f} ms), polyorder {p.sg_polyorder}")
+    print(f"SG window:         {p.sg_window} samples (~{1000 * (p.sg_window - 1) * r['dt']:.0f} ms span), polyorder {p.sg_polyorder}")
     print(f"fast phases:       {len(r['fast'])} ({right} rightward, {len(r['fast']) - right} leftward)")
     print(f"slow phases:       {len(r['slow'])}")
     print(f"beats:             {len(r['beats'])}")
@@ -273,6 +360,8 @@ def print_report(r, p):
         print(f"beat rate:         {len(r['beats']) / span:.2f} /s over {span:.2f} s")
     print(f"stimulus:          {direction_name(r['stimulus'])} (stim_displacement_pt)")
     print(f"note:              {SIGN_CAVEAT}")
+    if not np.any(np.isfinite(r["velocity"])):
+        print("note:              insufficient usable data for velocity estimation")
     if not r["intervals"]:
         print("no candidate OKN windows")
         return
@@ -296,7 +385,9 @@ def plot(r, p, out_path, title):
     t = r["t"]
     angle = np.where(r["valid"], r["angle"], np.nan)
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(11, 6.5))
-    ax1.plot(t, angle, color="0.3", linewidth=0.9, label="eye angle")
+    gaps = np.flatnonzero(np.diff(t) > GAP_FACTOR * r["dt"]) + 1
+    plot_t = np.insert(t, gaps, np.nan)
+    ax1.plot(plot_t, np.insert(angle, gaps, np.nan), color="0.3", linewidth=0.9, label="eye angle")
     for i, s in enumerate(r["slow"]):
         ts = np.array([s["start"], s["end"]])
         ax1.plot(ts, s["velocity"] * ts + s["intercept"], color="tab:blue", linewidth=2,
@@ -311,7 +402,7 @@ def plot(r, p, out_path, title):
     ax1.set_ylabel("horizontal eye angle (deg)\n+ = right, UNVERIFIED")
     ax1.legend(loc="upper right", fontsize="small")
     ax1.set_title(f"{title}\ncandidate OKN detection on raw, uncalibrated ARKit signals")
-    ax2.plot(t, r["velocity"], color="0.3", linewidth=0.9)
+    ax2.plot(plot_t, np.insert(r["velocity"], gaps, np.nan), color="0.3", linewidth=0.9)
     for y in (p.fast_threshold, -p.fast_threshold):
         ax2.axhline(y, color="tab:red", linestyle="--", linewidth=0.8)
     ax2.set_ylabel("SG velocity (deg/s)")
@@ -332,9 +423,6 @@ def main(argv=None):
                         help=f"default: {f.default}")
     args = ap.parse_args(argv)
     p = Params(**{f.name: getattr(args, f.name) for f in fields(Params)})
-    if p.sg_window % 2 == 0 or p.sg_window <= p.sg_polyorder:
-        ap.error("--sg-window must be odd and greater than --sg-polyorder")
-
     try:
         r = analyse(load_session(args.csv), p)
     except SessionError as e:

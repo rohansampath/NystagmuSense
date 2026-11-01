@@ -107,15 +107,37 @@ python3 scripts/detect_okn.py path/to/NS_....csv [--plot okn.png]
 
 A baseline, interpretable detector (no ML). It converts each eye's direction vector to a
 horizontal angle, masks untracked samples and blinks (padded 50 ms), differentiates with a
-Savitzky–Golay filter (5 samples, polyorder 2) within each valid run only, then finds fast
+local polynomial derivative (5 samples, polyorder 2; equivalent to Savitzky–Golay
+on uniform samples) using the actual camera timestamps, then finds fast
 phases (|v| > 40 deg/s), slow phases (line fits ≥ 0.15 s) and OKN beats (a slow phase followed
 within 0.1 s by an opposite-direction fast phase). OKN is a candidate where a 2 s window
 (0.5 s step) has ≥ 2 beats with ≥ 75 % in one direction. Every threshold is a CLI flag; run
 with `--help`.
 
+The entire pipeline splits on invalid samples and timestamp gaps greater than
+2.5× the median frame interval. It does not join slow/fast phases, count beats
+across missing data, or merge candidate windows across those boundaries. Each
+available blink channel is checked independently; missing/non-finite values in
+an available channel invalidate that sample. Opposite-direction candidate windows
+stay separate, and reported bounds never extend beyond the observed segment.
+Bounds are sliding-window support, **not measured physiological onset/offset**;
+beat counts and median slow velocity refer to the interval's dominant direction.
+Reversing stimulus displacement is reported as unknown rather than reduced to
+one net direction. Parameter and malformed CSV errors return a clean error.
+
 Caveats: thresholds were tuned on synthetic data only, the eye-angle sign (+ = subject's
 right) is **unverified on device**, and output is a research candidate with no clinical or
 contrast-sensitivity meaning.
+
+**Known specificity limitation:** `trials/trackingtest2` was recorded with deliberate
+left/right saccades, yet this baseline reports candidate OKN windows. A slow-phase
+line-fit slope alone does not establish sustained pursuit or distinguish voluntary
+motion from stimulus-driven OKN. Do not treat this negative-control intent as a
+verified ground-truth annotation, or adjust thresholds just to make it pass. Before
+enabling detection in the app, collect independently labelled positive recordings
+and controls (fixation, voluntary saccades, pursuit, head motion and blinks), verify
+direction on device, and assess false positives and sensitivity on recordings not
+used to select thresholds.
 
 ## CSV format (schema v1)
 
