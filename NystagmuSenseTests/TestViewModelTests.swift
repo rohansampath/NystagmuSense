@@ -79,8 +79,10 @@ struct TestViewModelTests {
         decoder.dateDecodingStrategy = .iso8601
         let metadata = try decoder.decode(SessionMetadata.self, from: Data(contentsOf: summary.files.metadata))
         #expect(metadata.stimulusViewport == StimulusViewport(widthPoints: 844, heightPoints: 390))
-        #expect(metadata.stimulus.stripeGray == 1)
-        #expect(metadata.stimulus.fixedBackgroundGray == 0)
+        #expect(metadata.stimulus.stripeGray == 0)
+        #expect(metadata.stimulus.fixedBackgroundGray == nil)
+        #expect(metadata.stimulus.fadeHalfCycleSeconds == 10)
+        #expect(metadata.stimulus.speedPointsPerSecond == 126)
     }
 
     func exportedSessions() -> [URL] {

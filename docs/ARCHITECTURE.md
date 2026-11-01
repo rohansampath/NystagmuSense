@@ -1,6 +1,6 @@
 # NystagmuSense architecture
 
-Status: recording MVP. The app shows white moving stripes over black, records ~10 s of
+Status: recording MVP. The app shows black moving stripes over a fading background, records ~10 s of
 raw ARKit eye-tracking data, and exports it as CSV + JSON. **It does not detect
 OKN or compute any clinical score.**
 
@@ -22,6 +22,7 @@ NystagmuSense/
 ├── Networking/APIClient.swift  unused placeholder (api.example.com); not called anywhere
 └── Utils/PipeForward.swift
 scripts/plot_gaze.py          offline plotting of exported recordings
+scripts/detect_okn.py         offline candidate OKN detection (not wired into the app)
 NystagmuSenseTests/           Swift Testing unit tests + MockGazeProvider
 ```
 
@@ -82,8 +83,10 @@ recording: inactive/background, surface resize ─▶ finish() with partial data
   loss of the active state stops capture and saves partial data.
 - The JSON sidecar includes the original full surface width/height in points and
   stripe/background grey levels. Old sidecars still decode with their original
-  black stripes and fading background. The default now maintains white-on-black
-  contrast for the entire recording.
+  black stripes and fading background. The default now uses black stripes over
+  a white → black fade spanning the ten-second recording, at 126 pt/s. A fixed
+  background remains available as an explicitly configured control. Each sidecar
+  records its settings; v2 also includes earlier fixed-background recordings.
 - `start()` and `finish()` are guarded by phase, so repeated `onAppear`
   calls and timer/error races can't start two sessions or export twice.
 - `sessionWasInterrupted` during recording is noted in the sidecar's `issues`
@@ -132,9 +135,13 @@ in each sidecar's `columns` key and in the README.
 > eye's *position* in the face and barely changes with gaze. Velocities and
 > OKN decisions derived from it weren't meaningful.
 
-## Future OKN detection (integration point)
+## Offline OKN detection and future app integration
 
-Input: `[RecordedSample]` (from `SessionRecorder.samples`) or the exported CSV.
+The current offline prototype is `scripts/detect_okn.py`; see the README for
+commands, timestamp/gap handling and known specificity limits. It has not been
+validated as a physiological OKN detector or ported into the iOS recording flow.
+
+Future app input: `[RecordedSample]` (from `SessionRecorder.samples`) or the exported CSV.
 Each sample has `t`, the raw `EyeMovementSample`, and the scheduled
 `StimulusSnapshot`. Planned pipeline, as pure Swift functions or structs in
 `Services/Analysis/` (no SwiftUI, ARKit or Core Data):
@@ -144,8 +151,8 @@ Each sample has `t`, the raw `EyeMovementSample`, and the scheduled
   → slow/fast phase classification → OKN events → tracking onset/offset → threshold estimation
 ```
 
-Prototype offline in Python on exported CSVs first, then port the validated
-algorithm. Wire it in by having `TestViewModel.finish()` pass
+Validate the existing offline Python prototype on labelled recordings before
+porting it into the app. Wire it in by having `TestViewModel.finish()` pass
 `recorder.samples` to the analyser *after* export, so a failed or absent
 analysis never blocks data capture.
 

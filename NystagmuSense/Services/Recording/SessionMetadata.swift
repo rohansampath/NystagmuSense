@@ -34,9 +34,9 @@ struct DeviceInfo: Codable, Equatable {
 
 struct SessionMetadata: Codable, Equatable {
     /// 1: black bars on a fading background (trials/trackingtest1–2).
-    /// 2: adds stimulusViewport and stimulus.fixedBackgroundGray/stripeGray; the
-    ///    default stimulus is white bars on a constant black background, so
-    ///    stim_bg_gray is constant.
+    /// 2: adds stimulusViewport and stimulus.fixedBackgroundGray/stripeGray.
+    ///    Stimulus settings describe each session: earlier v2 recordings used
+    ///    a fixed background; the current default uses a ten-second fade.
     var schemaVersion = 2
     let sessionID: UUID
     let startedAt: Date

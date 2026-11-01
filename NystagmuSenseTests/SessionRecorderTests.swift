@@ -37,6 +37,27 @@ struct SessionRecorderTests {
         #expect(r.droppedOutsideWindow == 2)
     }
 
+    @Test func exportKeepsFadeAndFasterMotionOnTheGazeTimeline() throws {
+        var r = makeRecorder()
+        for t in [0.0, 5.0, 10.0] { r.record(Fixture.tracked(at: 100 + t)) }
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let files = try r.export(to: dir, device: device)
+        let lines = try String(contentsOf: files.csv, encoding: .utf8).split(separator: "\n")
+        let expectedGray = ["1.000000", "0.500000", "0.000000"]
+        let expectedDisplacement = ["0.000", "630.000", "1260.000"]
+        for i in 0..<3 {
+            let fields = lines[i + 1].split(separator: ",", omittingEmptySubsequences: false)
+            #expect(fields[14] == expectedGray[i])
+            #expect(fields[15] == expectedDisplacement[i])
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let meta = try decoder.decode(SessionMetadata.self, from: Data(contentsOf: files.metadata))
+        #expect(meta.stimulus == StimulusConfig())
+        #expect(meta.plannedDurationSeconds == meta.stimulus.fadeHalfCycleSeconds)
+    }
+
     @Test func outOfOrderSamplesAreDroppedNotReordered() {
         var r = makeRecorder()
         r.record(Fixture.tracked(at: 101))

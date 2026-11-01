@@ -14,6 +14,7 @@ struct StimulusEngineTests {
     @Test func backgroundFadesWhiteToBlackAndBack() {
         var config = StimulusConfig()
         config.fixedBackgroundGray = nil
+        config.fadeHalfCycleSeconds = 30
         let engine = StimulusEngine(config: config)
         #expect(engine.backgroundGray(at: 0)  == 1)
         #expect(engine.backgroundGray(at: 15) == 0.5)
@@ -23,10 +24,33 @@ struct StimulusEngineTests {
         #expect(engine.snapshot(at: 15).shadePercent == 50)
     }
 
-    @Test func defaultWhiteBarsStayVisibleForEntireRecording() {
-        #expect(engine.config.stripeGray == 1)
-        for t in stride(from: 0.0, through: 60.0, by: 0.5) {
-            #expect(engine.snapshot(at: t).backgroundGray == 0)
+    @Test func defaultBlackBarsFadeIntoBackgroundWithinTenSeconds() {
+        #expect(engine.config.stripeGray == 0)
+        #expect(engine.config.fixedBackgroundGray == nil)
+        #expect(engine.backgroundGray(at: -1) == 1)
+        for t in stride(from: 0.0, through: 10.0, by: 0.5) {
+            #expect(abs(engine.snapshot(at: t).backgroundGray - (1 - t / 10)) < 1e-9)
+        }
+        #expect(engine.backgroundGray(at: 10) == engine.config.stripeGray)
+    }
+
+    @Test func fixedBackgroundControlDoesNotFade() {
+        var config = StimulusConfig()
+        config.fixedBackgroundGray = 0
+        config.stripeGray = 1
+        let engine = StimulusEngine(config: config)
+        for t in [0.0, 5.0, 10.0, 30.0] {
+            #expect(engine.backgroundGray(at: t) == 0)
+        }
+    }
+
+    @Test func stimulusSettingsRoundTripForFadingAndFixedSessions() throws {
+        let backgrounds: [Double?] = [nil, 0]
+        for fixedGray in backgrounds {
+            var config = StimulusConfig()
+            config.fixedBackgroundGray = fixedGray
+            let encoded = try JSONEncoder().encode(config)
+            #expect(try JSONDecoder().decode(StimulusConfig.self, from: encoded) == config)
         }
     }
 
@@ -66,10 +90,11 @@ struct StimulusEngineTests {
     }
 
     @Test func displacementFollowsSpeedAndDirection() {
-        #expect(engine.displacement(at: 2) == 180)
+        #expect(abs(engine.config.speedPointsPerSecond - 90 * 1.4) < 1e-9)
+        #expect(engine.displacement(at: 2) == 252)
         var cfg = StimulusConfig()
         cfg.direction = .leftward
-        #expect(StimulusEngine(config: cfg).displacement(at: 2) == -180)
+        #expect(StimulusEngine(config: cfg).displacement(at: 2) == -252)
         #expect(engine.displacement(at: -1) == 0)
     }
 
@@ -101,7 +126,7 @@ struct StimulusEngineTests {
 
     @Test func instructionFollowsConfiguredStimulus() {
         #expect(StimulusConfig().participantInstruction
-                == "Keep your head still and watch the white bars move to the right.")
+                == "Keep your head still and watch the black bars move to the right.")
         var cfg = StimulusConfig()
         cfg.direction = .leftward
         cfg.stripeGray = 0
