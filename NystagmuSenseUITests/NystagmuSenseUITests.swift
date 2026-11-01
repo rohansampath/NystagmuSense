@@ -23,6 +23,30 @@ final class NystagmuSenseUITests: XCTestCase {
     }
 
     @MainActor
+    func testRecordingRequiresLandscape() throws {
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["Record 10 Seconds"].tap()
+        let start = app.buttons["Start Recording"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        XCTAssertFalse(start.isEnabled)
+        XCTAssertTrue(app.staticTexts["Rotate your phone sideways"].exists)
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let enabled = NSPredicate(format: "enabled == true")
+        expectation(for: enabled, evaluatedWith: start)
+        waitForExpectations(timeout: 5)
+
+        XCUIDevice.shared.orientation = .portrait
+        let disabled = NSPredicate(format: "enabled == false")
+        expectation(for: disabled, evaluatedWith: start)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.staticTexts["Rotate your phone sideways"].exists)
+    }
+
+    @MainActor
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()

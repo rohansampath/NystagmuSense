@@ -39,6 +39,7 @@ struct SessionRecorder {
     let startedAt: Date
     let duration: TimeInterval
     let stimulus: StimulusEngine
+    let viewport: StimulusViewport?
 
     private(set) var samples: [RecordedSample] = []
     private(set) var droppedOutsideWindow = 0
@@ -46,12 +47,13 @@ struct SessionRecorder {
     private(set) var issues: [String] = []
 
     init(sessionID: UUID = UUID(), startUptime: TimeInterval, startedAt: Date = .now,
-         duration: TimeInterval, stimulus: StimulusEngine) {
+         duration: TimeInterval, stimulus: StimulusEngine, viewport: StimulusViewport? = nil) {
         self.sessionID   = sessionID
         self.startUptime = startUptime
         self.startedAt   = startedAt
         self.duration    = duration
         self.stimulus    = stimulus
+        self.viewport    = viewport
     }
 
     /// Adds a sample if it falls inside [0, duration] and doesn't go back in
@@ -133,7 +135,8 @@ struct SessionRecorder {
             droppedOutOfOrderCount: droppedOutOfOrder,
             observedSampleRateHz: observedSampleRate,
             stimulus: stimulus.config,
-            issues: issues
+            issues: issues,
+            stimulusViewport: viewport
         )
     }
 

@@ -14,6 +14,7 @@ enum GazeTrackingError: Error, Equatable, LocalizedError {
     case sessionFailed(String)
     case interrupted
     case noFramesReceived
+    case noTrackedFace
 
     var errorDescription: String? {
         switch self {
@@ -27,6 +28,8 @@ enum GazeTrackingError: Error, Equatable, LocalizedError {
             return "Face tracking was interrupted (app backgrounded or camera in use)."
         case .noFramesReceived:
             return "Face tracking did not start: no camera frames were received."
+        case .noTrackedFace:
+            return "No tracked face was found. Keep your face visible to the front camera and try again."
         }
     }
 }

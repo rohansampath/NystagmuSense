@@ -13,37 +13,46 @@ struct TestView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        stimulus
+        GeometryReader { geometry in
+            let surface = CGSize(
+                width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+                height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom)
+            stimulus
             .overlay(alignment: .top) {
                 RecordingStatusCard(phase: vm.phase,
+                                    isLandscape: vm.isLandscape,
                                     faceTracked: vm.faceTracked,
                                     trackedCount: vm.trackedCount,
                                     duration: vm.duration,
                                     canRetryExport: vm.canRetryExport,
+                                    onStart: vm.start,
                                     onRetryExport: vm.retryExport,
                                     onClose: close)
                     .padding()
             }
-            .onAppear {
-                UIApplication.shared.isIdleTimerDisabled = true
-                vm.start()
+            .onChange(of: surface, initial: true) { _, size in
+                vm.updateViewport(width: Double(size.width), height: Double(size.height))
             }
-            .onDisappear {
-                vm.cancel()
-                UIApplication.shared.isIdleTimerDisabled = false
-            }
-            .onChange(of: scenePhase) { _, phase in
-                if phase != .active { vm.appBecameInactive() }
-            }
-            .toolbar(.hidden, for: .navigationBar)
+        }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
+        .onDisappear {
+            vm.cancel()
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { vm.appBecameInactive() }
+        }
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     /// Stripes while capturing; a plain background once the session has ended.
     @ViewBuilder private var stimulus: some View {
         switch vm.phase {
-        case .finished, .failed, .cancelled:
+        case .idle, .starting, .finished, .failed, .cancelled:
             Color(.systemBackground).ignoresSafeArea()
-        default:
+        case .recording:
             FadingStripeView(engine: vm.stimulus, startTime: vm.stimulusStartTime)
         }
     }

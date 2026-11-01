@@ -5,7 +5,7 @@
 //  Created by Rohan Sampath on 6/30/25.
 //
 //  Lightweight session coordinator:
-//  start gaze provider → first frame starts clock + stimulus → record for
+//  start gaze provider → first tracked frame starts clock + stimulus → record for
 //  `duration` → stop → export CSV/JSON → report outcome.
 //
 //  OKN detection and scoring are intentionally NOT part of this path
@@ -35,13 +35,16 @@ final class TestViewModel: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .idle
-    /// Stimulus onset on the system-uptime clock; nil until the first camera frame.
+    /// Stimulus onset on the system-uptime clock; nil until the first tracked camera frame.
     @Published private(set) var stimulusStartTime: TimeInterval?
     @Published private(set) var faceTracked = false
     /// Face-tracked samples kept so far in this session (live progress).
     @Published private(set) var trackedCount = 0
     /// True after a failed export; samples stay in memory for `retryExport()`.
     @Published private(set) var canRetryExport = false
+    @Published private(set) var viewport: StimulusViewport?
+
+    var isLandscape: Bool { viewport?.isLandscape == true }
 
     let stimulus: StimulusEngine
     let duration: TimeInterval
@@ -71,7 +74,7 @@ final class TestViewModel: ObservableObject {
 
     /// Safe to call repeatedly (e.g. from `onAppear`); only the first call starts a session.
     func start() {
-        guard phase == .idle else { return }
+        guard phase == .idle, isLandscape else { return }
         guard provider.isSupported else { fail(.unsupportedDevice); return }
 
         // ARKitGazeProvider delivers callbacks on the main thread.
@@ -82,8 +85,27 @@ final class TestViewModel: ObservableObject {
         provider.start()                    // may report an error synchronously
         if phase == .starting {
             schedule(after: startupTimeout) { [weak self] in
-                if self?.phase == .starting { self?.fail(.noFramesReceived) }
+                if self?.phase == .starting { self?.fail(.noTrackedFace) }
             }
+        }
+    }
+
+    /// A change of surface size invalidates the original stimulus geometry.
+    /// Stop rather than mixing portrait and landscape samples in one trial.
+    func updateViewport(width: Double, height: Double) {
+        let next = StimulusViewport(widthPoints: width, heightPoints: height)
+        guard viewport != next else { return }
+        let previous = viewport
+        viewport = next
+        switch phase {
+        case .starting where !next.isLandscape:
+            stopCapture()
+            phase = .idle
+        case .recording where previous != nil:
+            recorder?.note("Stimulus surface changed size or orientation; recording is partial.")
+            finish()
+        default:
+            break
         }
     }
 
@@ -130,7 +152,7 @@ final class TestViewModel: ObservableObject {
     // MARK: - Provider events
 
     private func ingest(_ s: EyeMovementSample) {
-        if phase == .starting { beginRecording() }
+        if phase == .starting, s.isTracked { beginRecording() }
         guard phase == .recording else { return }
         if recorder?.record(s) == true, s.isTracked { trackedCount += 1 }
         if faceTracked != s.isTracked { faceTracked = s.isTracked }
@@ -153,7 +175,8 @@ final class TestViewModel: ObservableObject {
 
     private func beginRecording() {
         let t0 = now()
-        recorder          = SessionRecorder(startUptime: t0, duration: duration, stimulus: stimulus)
+        recorder          = SessionRecorder(startUptime: t0, duration: duration, stimulus: stimulus,
+                                            viewport: viewport)
         stimulusStartTime = t0
         phase             = .recording
         schedule(after: duration) { [weak self] in self?.finish() }

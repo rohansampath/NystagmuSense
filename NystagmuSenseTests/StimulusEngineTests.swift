@@ -4,6 +4,7 @@
 //
 
 import CoreGraphics
+import Foundation
 import Testing
 @testable import NystagmuSense
 
@@ -11,12 +12,57 @@ struct StimulusEngineTests {
     let engine = StimulusEngine()
 
     @Test func backgroundFadesWhiteToBlackAndBack() {
+        var config = StimulusConfig()
+        config.fixedBackgroundGray = nil
+        let engine = StimulusEngine(config: config)
         #expect(engine.backgroundGray(at: 0)  == 1)
         #expect(engine.backgroundGray(at: 15) == 0.5)
         #expect(engine.backgroundGray(at: 30) == 0)
         #expect(engine.backgroundGray(at: 45) == 0.5)
         #expect(engine.backgroundGray(at: 60) == 1)
         #expect(engine.snapshot(at: 15).shadePercent == 50)
+    }
+
+    @Test func defaultWhiteBarsStayVisibleForEntireRecording() {
+        #expect(engine.config.stripeGray == 1)
+        for t in stride(from: 0.0, through: 60.0, by: 0.5) {
+            #expect(engine.snapshot(at: t).backgroundGray == 0)
+        }
+    }
+
+    @Test func legacySidecarsRetainOriginalAppearance() throws {
+        let json = """
+        {"stripeWidthRatio":0.02,"pitchToWidthRatio":2.4,"speedPointsPerSecond":90,
+         "direction":"rightward","fadeHalfCycleSeconds":30}
+        """
+        let config = try JSONDecoder().decode(StimulusConfig.self, from: Data(json.utf8))
+        #expect(config.stripeGray == 0)
+        #expect(config.fixedBackgroundGray == nil)
+        #expect(StimulusEngine(config: config).backgroundGray(at: 15) == 0.5)
+    }
+
+    @Test func stripesMoveByScheduledDisplacementEachFrame() {
+        for direction in [StimulusConfig.Direction.leftward, .rightward] {
+            var config = StimulusConfig()
+            config.direction = direction
+            let engine = StimulusEngine(config: config)
+            for hz in [60.0, 120.0] {
+                let t = 0.1
+                let delta = 1 / hz
+                let before = engine.stripePositions(at: t, viewWidth: 844)
+                let after = engine.stripePositions(at: t + delta, viewWidth: 844)
+                let expected = engine.displacement(at: t + delta) - engine.displacement(at: t)
+                #expect(abs(Double(after[0] - before[0]) - expected) < 1e-9)
+            }
+        }
+    }
+
+    @Test func wraparoundPreservesVisibleGrating() {
+        let width: CGFloat = 844
+        let period = Double(engine.pitch(viewWidth: width)) / engine.config.speedPointsPerSecond
+        let before = engine.stripePositions(at: 0, viewWidth: width)
+        let after = engine.stripePositions(at: period, viewWidth: width)
+        for (a, b) in zip(before, after) { #expect(abs(a - b) < 1e-9) }
     }
 
     @Test func displacementFollowsSpeedAndDirection() {

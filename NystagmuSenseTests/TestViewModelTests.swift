@@ -16,8 +16,71 @@ struct TestViewModelTests {
 
     /// Long duration so the auto-finish timer never fires during a test.
     func makeVM(now: Double = 100) -> TestViewModel {
-        TestViewModel(provider: provider, duration: 1000, startupTimeout: 1000,
+        let vm = TestViewModel(provider: provider, duration: 1000, startupTimeout: 1000,
                       outputDirectory: outputDir, now: { now })
+        vm.updateViewport(width: 844, height: 390)
+        return vm
+    }
+
+    @Test func portraitCannotStartCameraOrStimulus() {
+        let vm = makeVM()
+        vm.updateViewport(width: 390, height: 844)
+        vm.start()
+        #expect(vm.phase == .idle)
+        #expect(provider.startCount == 0)
+        #expect(vm.stimulusStartTime == nil)
+        vm.updateViewport(width: 844, height: 390)
+        vm.start()
+        #expect(provider.startCount == 1)
+        #expect(vm.phase == .starting)
+    }
+
+    @Test func unknownViewportCannotStart() {
+        let vm = TestViewModel(provider: provider)
+        vm.start()
+        #expect(vm.phase == .idle)
+        #expect(provider.startCount == 0)
+    }
+
+    @Test func untrackedFramesDoNotStartStimulus() {
+        let vm = makeVM()
+        vm.start()
+        provider.emit(.untracked(at: 100))
+        #expect(vm.phase == .starting)
+        #expect(vm.stimulusStartTime == nil)
+        provider.emit(Fixture.tracked(at: 100))
+        #expect(vm.phase == .recording)
+    }
+
+    @Test func rotationBeforeFirstFrameReturnsToReadiness() {
+        let vm = makeVM()
+        vm.start()
+        vm.updateViewport(width: 390, height: 844)
+        provider.emit(Fixture.tracked(at: 100))
+        #expect(vm.phase == .idle)
+        #expect(provider.stopCount == 1)
+        #expect(vm.stimulusStartTime == nil)
+    }
+
+    @Test func rotationDuringRecordingSavesPartialWithOriginalGeometry() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = makeVM()
+        vm.start()
+        provider.emit(Fixture.tracked(at: 100))
+        vm.updateViewport(width: 390, height: 844)
+        provider.emit(Fixture.tracked(at: 100.1))
+        guard case .finished(let summary) = vm.phase else {
+            Issue.record("expected finished, got \(vm.phase)"); return
+        }
+        #expect(summary.sampleCount == 1)
+        #expect(summary.issues == ["Stimulus surface changed size or orientation; recording is partial."])
+        #expect(provider.stopCount == 1)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let metadata = try decoder.decode(SessionMetadata.self, from: Data(contentsOf: summary.files.metadata))
+        #expect(metadata.stimulusViewport == StimulusViewport(widthPoints: 844, heightPoints: 390))
+        #expect(metadata.stimulus.stripeGray == 1)
+        #expect(metadata.stimulus.fixedBackgroundGray == 0)
     }
 
     func exportedSessions() -> [URL] {
