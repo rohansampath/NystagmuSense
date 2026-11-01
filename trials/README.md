@@ -6,3 +6,4 @@ CSV and its plot (`python3 scripts/plot_gaze.py <csv>`). CSV format: see the mai
 | Trial | Date | Notes |
 |---|---|---|
 | `trackingtest1` | 2026-10-24 | First on-device run. iPhone 16 Pro (`iPhone17,1`), iOS 26.6.2, session `3DA64179`. 599 samples, 60 Hz, 100 % tracked, no gaps (3 frames outside the 10 s window dropped as expected). Blink at ~0.9–1.05 s (blink 0.81, lookAt y dips to −0.22 m). No clear OKN sawtooth. |
+| `trackingtest2` | 2026-11-01 | iPhone 16 Pro (`iPhone17,1`), iOS 26.6.2, session `F9B940E8`. 597 samples, 60 Hz, 592 tracked (99.2 %; first ~0.08 s untracked), no gaps. Rightward stimulus, 90 pt/s. Gaze steps between flat plateaus (~±0.15 m lookAt x) about every 0.5–1 s, with vertical moving alongside; looks like deliberate left/right fixations, not an OKN sawtooth. |
