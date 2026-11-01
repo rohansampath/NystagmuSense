@@ -96,6 +96,7 @@ struct SessionRecorderTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let meta = try decoder.decode(SessionMetadata.self, from: Data(contentsOf: files.metadata))
+        #expect(meta.schemaVersion == 2)
         #expect(meta.sessionID == r.sessionID)
         #expect(meta.sampleCount == 2)
         #expect(meta.device == device)

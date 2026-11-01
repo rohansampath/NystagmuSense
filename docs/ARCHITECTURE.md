@@ -59,15 +59,27 @@ Rules:
 
 ```text
 idle ──landscape + Start──▶ starting ──first tracked frame──▶ recording ──10 s timer / finish()──▶ finished(summary)
-                     │                          │                                └▶ failed (0 samples / write error)
-                     ├─ unsupported / permission / startup timeout (5 s) ──▶ failed
-                     ├─ app leaves foreground ─▶ failed  (during recording: finish() with partial data)
-                     └─ cancel() (view disappears) ──────────────────────────▶ cancelled (nothing saved)
+  ▲                  │                          │                                └▶ failed (0 samples / write error)
+  │                  ├─ unsupported / camera denied ──────────────────▶ failed
+  │                  ├─ no frames for 5 s (paused while inactive) ────▶ failed(.noFramesReceived)
+  │                  ├─ frames but no face for 5 s ───────────────────▶ failed(.noTrackedFace)
+  │                  ├─ app backgrounded / landscape lost ─▶ idle
+  │                  └─ cancel() (view disappears) ───────▶ cancelled (nothing saved)
+  └──── tryAgain() ◀── failed (except failed export, which offers retryExport())
+recording: inactive/background, surface resize ─▶ finish() with partial data
 ```
 
 - Landscape is required before the camera can start. The user explicitly taps
-  Start Recording once ready. Losing landscape while starting returns to readiness;
-  changing the stimulus surface size during capture saves a partial session.
+  Start Recording once ready. During `starting` and `recording`, `OrientationLock`
+  (App/OrientationLock.swift, via the app delegate's
+  `supportedInterfaceOrientationsFor`) pins the current landscape side, so neither
+  a 180° flip nor a turn to portrait can rotate the stimulus mid-trial. If the lock
+  can't be applied (e.g. iPad multitasking), `updateViewport` is the backstop:
+  losing landscape while starting returns to readiness, and any surface-size change
+  during capture saves a partial session.
+- Scene phase: `.inactive` while starting is expected (ARKit's first-run camera
+  permission alert) and only pauses the no-frames timeout. While recording, any
+  loss of the active state stops capture and saves partial data.
 - The JSON sidecar includes the original full surface width/height in points and
   stripe/background grey levels. Old sidecars still decode with their original
   black stripes and fading background. The default now maintains white-on-black
@@ -84,7 +96,8 @@ idle ──landscape + Start──▶ starting ──first tracked frame──�
 
 - One reference: `t0 = CACurrentMediaTime()` when the **first tracked ARKit frame is
   delivered**. Both the stimulus animation and the sample timeline use it.
-  Before that, the stimulus is hidden.
+  Before that, the static t = 0 frame is shown, so motion onset isn't also a
+  luminance step.
 - `ARFrame.timestamp` and `CACurrentMediaTime()` share the system-uptime
   (monotonic) clock, so `t_s = ARFrame.timestamp − t0`. Wall-clock `Date` is
   only stored in metadata for humans.

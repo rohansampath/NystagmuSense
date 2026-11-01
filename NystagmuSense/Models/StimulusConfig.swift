@@ -44,6 +44,20 @@ struct StimulusConfig: Codable, Equatable {
     }
 }
 
+extension StimulusConfig {
+    /// What the participant is told to watch, derived from the configured stimulus.
+    var participantInstruction: String {
+        let bars: String
+        switch stripeGray {
+        case 0.9...:  bars = "white"
+        case ..<0.1:  bars = "black"
+        default:      bars = "grey"
+        }
+        let way = direction == .rightward ? "right" : "left"
+        return "Keep your head still and watch the \(bars) bars move to the \(way)."
+    }
+}
+
 /// Full stimulus surface in SwiftUI points, saved to reproduce stripe geometry.
 struct StimulusViewport: Codable, Equatable {
     let widthPoints: Double

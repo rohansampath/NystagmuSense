@@ -13,9 +13,12 @@ struct RecordingStatusCard: View {
     let faceTracked: Bool
     let trackedCount: Int
     let duration: TimeInterval
+    let stimulus: StimulusConfig
     let canRetryExport: Bool
+    let canTryAgain: Bool
     let onStart: () -> Void
     let onRetryExport: () -> Void
+    let onTryAgain: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -26,7 +29,7 @@ struct RecordingStatusCard: View {
                       systemImage: "iphone.gen3.landscape")
                     .font(.headline)
                 Text(isLandscape
-                     ? "Keep your head still and watch the white bars move to the right."
+                     ? stimulus.participantInstruction
                      : "Landscape mode is required. If the screen won't rotate, turn off Portrait Orientation Lock.")
                 Button("Start Recording", action: onStart)
                     .buttonStyle(.borderedProminent)
@@ -44,6 +47,7 @@ struct RecordingStatusCard: View {
                     Label(faceTracked ? "Face tracked" : "Face not detected",
                           systemImage: faceTracked ? "eye" : "eye.slash")
                         .foregroundStyle(faceTracked ? .green : .red)
+                    Text("\(trackedCount) tracked").monospacedDigit()
                     Button("Cancel", action: onClose)
                 }
 
@@ -71,6 +75,9 @@ struct RecordingStatusCard: View {
                 HStack {
                     if canRetryExport {
                         Button("Retry Export", action: onRetryExport).buttonStyle(.borderedProminent)
+                    }
+                    if canTryAgain {
+                        Button("Try Again", action: onTryAgain).buttonStyle(.borderedProminent)
                     }
                     Button("Done", action: onClose).buttonStyle(.bordered)
                 }
