@@ -38,7 +38,7 @@ itself a calibrated contrast-sensitivity measurement.
 | Component | Status |
 |---|---|
 | Menu → **Record 10 Seconds** → test screen | Works. The 30 s countdown screen is skipped for Deliverable 1 (`CountdownOverlay` kept, unused) |
-| Moving stripe stimulus | White bars on a fixed black background, gated on landscape and face tracking |
+| Moving stripe stimulus | Black bars at 126 pt/s over a white → black background fade; motion and the ten-second fade wait for landscape and face tracking |
 | 10 s raw ARKit eye-tracking recording | Earlier app recordings are checked into `trials/`; the newly merged landscape/permission/retry flow passes simulator tests and needs a fresh phone run |
 | CSV + JSON export (share sheet / Files app) | Real schema-v1 device exports are checked in; new recordings use schema v2 with surface size and stripe/background settings |
 | Python plotting (`scripts/plot_gaze.py`) | Tested on synthetic data and checked-in real device recordings |
@@ -81,9 +81,11 @@ In-app OKN detection and contrast-sensitivity measurement remain future work.
    landscape side you're holding, so it can't rotate mid-trial. The static
    stimulus frame is already showing, and once a face is tracked the stimulus starts
    moving and the recording clock starts together.
-3. Keep your head still and watch the white vertical bars move rightward over a
-   fixed black background (90 SwiftUI points/s). The compact status card shows
-   face-tracking status while leaving most of the stimulus visible.
+3. Keep your head still and watch the black vertical bars move rightward at
+   **126 SwiftUI points/s** (40% faster than 90 pt/s). Over the ten-second capture,
+   the background fades steadily from white to black, where it matches the bars.
+   The static white-background frame before capture avoids a brightness step at
+   motion onset. The compact card shows face-tracking status.
 4. After ~10 s, the stimulus disappears and **Recording saved** shows sample count
    and observed rate. If the surface changes despite the orientation lock (for
    example, iPad multitasking), or the app becomes inactive during recording,
@@ -95,8 +97,12 @@ In-app OKN detection and contrast-sensitivity measurement remain future work.
 
 The sidecar records the full stimulus surface size (`stimulusViewport`, in
 points) and stripe/background grey levels, alongside speed, direction and spacing.
-The default capture uses constant contrast; an explicitly configured experiment
-can set `fixedBackgroundGray` to nil to enable the legacy background fade.
+The default capture uses black bars (`stripeGray = 0`) with a ten-second
+background fade (`fixedBackgroundGray = nil`, `fadeHalfCycleSeconds = 10`).
+Longer explicitly configured sessions continue the triangle wave back to white.
+A fixed-background control can set `fixedBackgroundGray` to a grey code value.
+The recorded background is a scheduled sRGB display value, not measured luminance
+or a calibrated contrast threshold.
 These changes support repeatable data collection. OKN detection is available
 offline in Python; it is not enabled in the iOS app.
 
@@ -185,6 +191,29 @@ and controls (fixation, voluntary saccades, pursuit, head motion and blinks), ve
 direction on device, and assess false positives and sensitivity on recordings not
 used to select thresholds.
 
+## Relationship to the original paper's score
+
+The original project paper's Methods (pp. 7–8, *Contrast Sensitivity Function Test
+App Using Optokinetic Nystagmus*, Rohan Sampath) describes black moving bars over
+a white → black background, two cycles, a 100–150 pixel eye-movement rule, gaps
+longer than one second to mark pauses, and the common logarithm of the average
+background values at selected timestamps.
+
+The current app restores that **stimulus polarity and fading behavior**, with
+one full downward sweep during the existing ten-second recording and the
+requested 40% increase in speed. It does not reproduce the paper's two-cycle
+protocol or pixel-distance detector: current ARKit exports are face-relative
+vectors/metres, and the SG script uses angle-derived velocities. Its candidate
+window boundaries are not precise, validated stop-tracking timestamps.
+
+**The paper's score is not currently calculated.** SG differentiation alone
+does not implement sustained OKN-loss detection, rejection of blinks/dropouts,
+selection of fade crossings or aggregation across cycles. That validated event
+logic must precede any timestamp-to-background score. The old `ScoreCalculator`
+is kept only for historical results and remains disconnected. Even reproducing
+`log10(mean(background values))` would yield an experimental project index,
+not a calibrated CSF or a clinically validated result.
+
 ## CSV format (schema v2)
 
 `schemaVersion` in the sidecar tells recordings apart:
@@ -192,8 +221,10 @@ used to select thresholds.
 - **v1** (`trials/trackingtest1`–`2`): black bars on a white→black fading
   background, so `stim_bg_gray` changes over time.
 - **v2**: the sidecar adds `stimulusViewport`, `stimulus.fixedBackgroundGray` and
-  `stimulus.stripeGray`. The default stimulus is white bars on a constant black
-  background, so `stim_bg_gray` is constant (0). CSV columns are unchanged.
+  `stimulus.stripeGray`. Earlier v2 settings used white bars on fixed black; the
+  current default uses black bars, a white → black fade over ten seconds, and
+  126 pt/s motion. Read the saved stimulus settings for each session rather than
+  inferring appearance from schema version. CSV columns are unchanged.
 
 | column | meaning | units |
 |---|---|---|
@@ -243,7 +274,7 @@ xcodebuild test -project NystagmuSense.xcodeproj -scheme NystagmuSense \
   -only-testing:NystagmuSenseUITests/NystagmuSenseUITests/testRecordingRequiresLandscape
 ```
 
-The merged implementation passed **42 Swift unit tests, 1 landscape UI test and
+The merged implementation passed **45 Swift unit tests, 1 landscape UI test and
 30 Python tests**. The simulator verifies lifecycle/UI logic with mock gaze;
 TrueDepth capture and perceived stimulus motion require a physical phone.
 
@@ -262,5 +293,10 @@ TrueDepth capture and perceived stimulus motion require a physical phone.
   standardised across devices. Screen brightness isn't controlled.
 - A static grating appears before capture. Motion and recording start together
   after the first tracked face frame arrives; startup time is not recorded.
-- Default recordings keep contrast constant. They do not sweep contrast to find
-  a threshold or measure a CSF; the legacy shade-based score is not used.
+- The background fade varies display values and absolute luminance difference;
+  it is not a calibrated sweep of normalized grating contrast. For example,
+  Michelson contrast uses `(Lmax - Lmin) / (Lmax + Lmin)`: if black luminance
+  were exactly zero, reducing the other level would leave this ratio at 1 until
+  both vanish. Actual display luminance and black level must be measured; see
+  [this study’s grating-contrast definition](https://www.nature.com/articles/s41598-017-16873-6).
+  The legacy shade-based score is not used.

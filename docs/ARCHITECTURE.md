@@ -1,6 +1,6 @@
 # NystagmuSense architecture
 
-Status: recording MVP. The app shows white moving stripes over black, records ~10 s of
+Status: recording MVP. The app shows black moving stripes over a fading background, records ~10 s of
 raw ARKit eye-tracking data, and exports it as CSV + JSON. **It does not detect
 OKN or compute any clinical score.**
 
@@ -83,8 +83,10 @@ recording: inactive/background, surface resize ─▶ finish() with partial data
   loss of the active state stops capture and saves partial data.
 - The JSON sidecar includes the original full surface width/height in points and
   stripe/background grey levels. Old sidecars still decode with their original
-  black stripes and fading background. The default now maintains white-on-black
-  contrast for the entire recording.
+  black stripes and fading background. The default now uses black stripes over
+  a white → black fade spanning the ten-second recording, at 126 pt/s. A fixed
+  background remains available as an explicitly configured control. Each sidecar
+  records its settings; v2 also includes earlier fixed-background recordings.
 - `start()` and `finish()` are guarded by phase, so repeated `onAppear`
   calls and timer/error races can't start two sessions or export twice.
 - `sessionWasInterrupted` during recording is noted in the sidecar's `issues`

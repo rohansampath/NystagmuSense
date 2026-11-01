@@ -15,14 +15,16 @@ struct StimulusConfig: Codable, Equatable {
     /// Stripe pitch (period) as a multiple of the stripe width.
     var pitchToWidthRatio: Double = 2.4
     /// Stripe drift speed in SwiftUI points per second (not physical pixels).
-    var speedPointsPerSecond: Double = 90
+    var speedPointsPerSecond: Double = 126
     var direction: Direction = .rightward
-    /// Seconds for the background to fade white → black (then back).
-    var fadeHalfCycleSeconds: Double = 30
-    /// A fixed background keeps contrast visible throughout capture. Nil enables
-    /// the legacy white → black fade for explicitly configured experiments.
-    var fixedBackgroundGray: Double? = 0
-    var stripeGray: Double = 1
+    /// Seconds for the background to fade white → black (then back in longer
+    /// sessions). The default ten-second capture covers one downward sweep.
+    var fadeHalfCycleSeconds: Double = 10
+    /// Nil enables the background fade. Set a grey value to run a fixed-
+    /// background control. These are display code values, not luminance.
+    var fixedBackgroundGray: Double? = nil
+    /// Black bars match the white → black background fade in the paper.
+    var stripeGray: Double = 0
 
     init() {}
 
