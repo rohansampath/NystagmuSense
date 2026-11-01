@@ -162,9 +162,24 @@ horizontal angle, masks untracked samples and blinks (padded 50 ms), and estimat
 velocity with a local polynomial derivative (5 samples, polyorder 2; equivalent to Savitzky–Golay
 on uniform samples) using the actual camera timestamps, then finds fast
 phases (|v| > 40 deg/s), slow phases (line fits ≥ 0.15 s) and OKN beats (a slow phase followed
-within 0.1 s by an opposite-direction fast phase). OKN is a candidate where a 2 s window
+within 0.1 s by an opposite-direction fast phase). Proposed slow phases must also
+pass provisional quality gates: line-fit R² ≥ 0.8 and ≥ 80% of time-weighted SG
+velocity samples agreeing with the fitted direction. A large net slope across
+several reversals is therefore insufficient. OKN is a candidate where a 2 s window
 (0.5 s step) has ≥ 2 beats with ≥ 75 % in one direction. Every threshold is a CLI flag; run
 with `--help`.
+
+The report gives fit rejection reasons and per-beat timestamps/quality metrics.
+The plot shows rejected fits as dashed grey lines, qualified fits in blue and
+numbered green markers for accepted slow/reset pairs. The green strip remains
+**window support**, not continuous proof of OKN. When `stim_bg_gray` is present, a
+third panel shows the scheduled display value; it is not measured contrast.
+
+These new gates are conservative heuristics, **not calibrated accuracy or
+confidence estimates**. Curved or noisy true slow phases may fail them. The flags
+`--min-slow-r2` and `--min-slow-direction-agreement` expose the criteria; setting
+both to 0 provides a comparison with the earlier slope-only pairing behavior.
+Do not tune these thresholds merely to make a particular screenshot look right.
 
 The entire pipeline splits on invalid samples and timestamp gaps greater than
 2.5× the median frame interval. It does not join slow/fast phases, count beats
@@ -181,15 +196,19 @@ Caveats: thresholds were tuned on synthetic data only, the eye-angle sign (+ = s
 right) is **unverified on device**, and output is a research candidate with no clinical or
 contrast-sensitivity meaning.
 
-**Known specificity limitation:** `trials/trackingtest2` was recorded with deliberate
-left/right saccades, yet this baseline reports candidate OKN windows. A slow-phase
-line-fit slope alone does not establish sustained pursuit or distinguish voluntary
-motion from stimulus-driven OKN. Do not treat this negative-control intent as a
-verified ground-truth annotation, or adjust thresholds just to make it pass. Before
-enabling detection in the app, collect independently labelled positive recordings
-and controls (fixation, voluntary saccades, pursuit, head motion and blinks), verify
-direction on device, and assess false positives and sensitivity on recordings not
-used to select thresholds.
+**Known specificity limitation:** the earlier slope-only baseline labelled the
+deliberate left/right saccade recording `trials/trackingtest2` as candidate OKN.
+The new quality gates reject its proposed beats under current defaults. This
+recording was examined during development, so that result is a regression check,
+not an independent specificity estimate. Voluntary movements with sufficiently
+linear drift can still pass. Collect independently labelled positive recordings
+and controls, verify the eye-angle sign with known left/right gaze movements, and
+measure sensitivity and false positives on held-out recordings before enabling
+detection in the app. Do not flip eye-angle sign solely to match the stimulus.
+
+Relevant validation precedent: [Sangi et al. (2015)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4848063/)
+compared detections with masked human annotations. Our provisional fit gates are
+an implementation choice and have not been validated by that study.
 
 ## Relationship to the original paper's score
 
@@ -257,9 +276,10 @@ python3 scripts/detect_okn.py trials/trackingtest2/trackingtest2.csv --plot /tmp
 ```
 
 With the current defaults, `trackingtest1` has 0 fast phases and no candidate
-windows; `trackingtest2` has 27 fast phases and 9 beats, yielding one candidate
-interval at approximately 0.14–5.14 s. These are reproducibility checks, not
-validated labels or accuracy measurements.
+windows; `trackingtest2` has 27 fast phases but no accepted beats or candidate
+windows with the quality gates. The earlier slope-only baseline counted 9 beats
+and a candidate interval around 0.14–5.14 s. These are reproducibility checks,
+not validated labels or accuracy measurements.
 
 For Swift tests, select the installed Xcode toolchain and simulator. The device
 name below is an example; replace it with one listed by `-showdestinations`:
@@ -275,7 +295,7 @@ xcodebuild test -project NystagmuSense.xcodeproj -scheme NystagmuSense \
 ```
 
 The merged implementation passed **45 Swift unit tests, 1 landscape UI test and
-30 Python tests**. The simulator verifies lifecycle/UI logic with mock gaze;
+37 Python tests**. The simulator verifies lifecycle/UI logic with mock gaze;
 TrueDepth capture and perceived stimulus motion require a physical phone.
 
 ## Known limitations
