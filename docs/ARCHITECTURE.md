@@ -1,6 +1,6 @@
 # NystagmuSense architecture
 
-Status: recording MVP. The app shows the moving-stripe stimulus, records ~10 s of
+Status: recording MVP. The app shows white moving stripes over black, records ~10 s of
 raw ARKit eye-tracking data, and exports it as CSV + JSON. **It does not detect
 OKN or compute any clinical score.**
 
@@ -58,13 +58,32 @@ Rules:
 ## Session lifecycle (`TestViewModel.phase`)
 
 ```text
-idle ──start()──▶ starting ──first frame──▶ recording ──10 s timer / finish()──▶ finished(summary)
-                     │                          │                                └▶ failed (0 samples / write error)
-                     ├─ unsupported / permission / startup timeout (5 s) ──▶ failed
-                     ├─ app leaves foreground ─▶ failed  (during recording: finish() with partial data)
-                     └─ cancel() (view disappears) ──────────────────────────▶ cancelled (nothing saved)
+idle ──landscape + Start──▶ starting ──first tracked frame──▶ recording ──10 s timer / finish()──▶ finished(summary)
+  ▲                  │                          │                                └▶ failed (0 samples / write error)
+  │                  ├─ unsupported / camera denied ──────────────────▶ failed
+  │                  ├─ no frames for 5 s (paused while inactive) ────▶ failed(.noFramesReceived)
+  │                  ├─ frames but no face for 5 s ───────────────────▶ failed(.noTrackedFace)
+  │                  ├─ app backgrounded / landscape lost ─▶ idle
+  │                  └─ cancel() (view disappears) ───────▶ cancelled (nothing saved)
+  └──── tryAgain() ◀── failed (except failed export, which offers retryExport())
+recording: inactive/background, surface resize ─▶ finish() with partial data
 ```
 
+- Landscape is required before the camera can start. The user explicitly taps
+  Start Recording once ready. During `starting` and `recording`, `OrientationLock`
+  (App/OrientationLock.swift, via the app delegate's
+  `supportedInterfaceOrientationsFor`) pins the current landscape side, so neither
+  a 180° flip nor a turn to portrait can rotate the stimulus mid-trial. If the lock
+  can't be applied (e.g. iPad multitasking), `updateViewport` is the backstop:
+  losing landscape while starting returns to readiness, and any surface-size change
+  during capture saves a partial session.
+- Scene phase: `.inactive` while starting is expected (ARKit's first-run camera
+  permission alert) and only pauses the no-frames timeout. While recording, any
+  loss of the active state stops capture and saves partial data.
+- The JSON sidecar includes the original full surface width/height in points and
+  stripe/background grey levels. Old sidecars still decode with their original
+  black stripes and fading background. The default now maintains white-on-black
+  contrast for the entire recording.
 - `start()` and `finish()` are guarded by phase, so repeated `onAppear`
   calls and timer/error races can't start two sessions or export twice.
 - `sessionWasInterrupted` during recording is noted in the sidecar's `issues`
@@ -75,9 +94,10 @@ idle ──start()──▶ starting ──first frame──▶ recording ──
 
 ## Timestamps and synchronisation
 
-- One reference: `t0 = CACurrentMediaTime()` when the **first ARKit frame is
+- One reference: `t0 = CACurrentMediaTime()` when the **first tracked ARKit frame is
   delivered**. Both the stimulus animation and the sample timeline use it.
-  Before that, the stimulus shows its static t = 0 frame.
+  Before that, the static t = 0 frame is shown, so motion onset isn't also a
+  luminance step.
 - `ARFrame.timestamp` and `CACurrentMediaTime()` share the system-uptime
   (monotonic) clock, so `t_s = ARFrame.timestamp − t0`. Wall-clock `Date` is
   only stored in metadata for humans.

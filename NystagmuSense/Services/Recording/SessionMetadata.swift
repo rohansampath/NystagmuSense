@@ -33,7 +33,11 @@ struct DeviceInfo: Codable, Equatable {
 }
 
 struct SessionMetadata: Codable, Equatable {
-    var schemaVersion = 1
+    /// 1: black bars on a fading background (trials/trackingtest1–2).
+    /// 2: adds stimulusViewport and stimulus.fixedBackgroundGray/stripeGray; the
+    ///    default stimulus is white bars on a constant black background, so
+    ///    stim_bg_gray is constant.
+    var schemaVersion = 2
     let sessionID: UUID
     let startedAt: Date
     let device: DeviceInfo
@@ -46,11 +50,12 @@ struct SessionMetadata: Codable, Equatable {
     let observedSampleRateHz: Double?
     let stimulus: StimulusConfig
     let issues: [String]
+    var stimulusViewport: StimulusViewport? = nil
     var gazeSource = "ARKit ARFaceTrackingConfiguration (TrueDepth)"
     var columns = SessionMetadata.columnDescriptions
     var timingNotes = """
         t_s = ARFrame.timestamp - session start, both on the system-uptime clock. \
-        Session start is when the first camera frame was received; the stimulus animation \
+        Session start is when the first tracked camera frame was received; the stimulus animation \
         uses the same reference. stim_* columns are the stimulus state scheduled for t_s, \
         not a confirmed displayed frame: display latency and camera exposure/processing \
         latency (typically tens of ms) are not compensated.

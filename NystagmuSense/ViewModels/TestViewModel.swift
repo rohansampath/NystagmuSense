@@ -5,7 +5,7 @@
 //  Created by Rohan Sampath on 6/30/25.
 //
 //  Lightweight session coordinator:
-//  start gaze provider → first frame starts clock + stimulus → record for
+//  start gaze provider → first tracked frame starts clock + stimulus → record for
 //  `duration` → stop → export CSV/JSON → report outcome.
 //
 //  OKN detection and scoring are intentionally NOT part of this path
@@ -35,13 +35,16 @@ final class TestViewModel: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .idle
-    /// Stimulus onset on the system-uptime clock; nil until the first camera frame.
+    /// Stimulus onset on the system-uptime clock; nil until the first tracked camera frame.
     @Published private(set) var stimulusStartTime: TimeInterval?
     @Published private(set) var faceTracked = false
     /// Face-tracked samples kept so far in this session (live progress).
     @Published private(set) var trackedCount = 0
     /// True after a failed export; samples stay in memory for `retryExport()`.
     @Published private(set) var canRetryExport = false
+    @Published private(set) var viewport: StimulusViewport?
+
+    var isLandscape: Bool { viewport?.isLandscape == true }
 
     let stimulus: StimulusEngine
     let duration: TimeInterval
@@ -52,6 +55,8 @@ final class TestViewModel: ObservableObject {
     private let now: () -> TimeInterval
     private var recorder: SessionRecorder?
     private var timer: Task<Void, Never>?
+    /// Whether any camera frame (tracked or not) has arrived since `start()`.
+    private var framesSeen = false
 
     init(provider: GazeProvider = ARKitGazeProvider(),
          stimulus: StimulusEngine = StimulusEngine(),
@@ -71,7 +76,7 @@ final class TestViewModel: ObservableObject {
 
     /// Safe to call repeatedly (e.g. from `onAppear`); only the first call starts a session.
     func start() {
-        guard phase == .idle else { return }
+        guard phase == .idle, isLandscape else { return }
         guard provider.isSupported else { fail(.unsupportedDevice); return }
 
         // ARKitGazeProvider delivers callbacks on the main thread.
@@ -79,11 +84,38 @@ final class TestViewModel: ObservableObject {
         provider.onError  = { [weak self] e in MainActor.assumeIsolated { self?.handle(e) } }
 
         phase = .starting
+        framesSeen = false
         provider.start()                    // may report an error synchronously
-        if phase == .starting {
-            schedule(after: startupTimeout) { [weak self] in
-                if self?.phase == .starting { self?.fail(.noFramesReceived) }
-            }
+        if phase == .starting { scheduleNoFramesTimeout() }
+    }
+
+    /// Clears a failed session (other than a failed export, which keeps its
+    /// samples for `retryExport()`) so the user can start again in place.
+    func tryAgain() {
+        guard canTryAgain else { return }
+        resetToIdle()
+    }
+
+    var canTryAgain: Bool {
+        if case .failed = phase { return !canRetryExport }
+        return false
+    }
+
+    /// A change of surface size invalidates the original stimulus geometry.
+    /// Stop rather than mixing portrait and landscape samples in one trial.
+    func updateViewport(width: Double, height: Double) {
+        let next = StimulusViewport(widthPoints: width, heightPoints: height)
+        guard viewport != next else { return }
+        viewport = next
+        switch phase {
+        case .starting where !next.isLandscape:
+            stopCapture()
+            phase = .idle
+        case .recording:
+            recorder?.note("Stimulus surface changed size or orientation; recording is partial.")
+            finish()
+        default:
+            break
         }
     }
 
@@ -105,16 +137,25 @@ final class TestViewModel: ObservableObject {
         export(recorder)
     }
 
-    /// App left the foreground: camera capture can't continue honestly, so stop
-    /// now. Data already recorded is saved and marked partial.
-    func appBecameInactive() {
-        switch phase {
-        case .starting:
-            stopCapture()
-            phase = .failed("The app left the foreground before recording started.")
-        case .recording:
+    /// Reacts to the app's scene phase.
+    /// - While recording, any loss of the active state (Control Center, a call,
+    ///   backgrounding) stops capture; data so far is saved and marked partial.
+    /// - While starting, `.inactive` is expected: ARKit's camera-permission alert
+    ///   causes it. The no-frames timeout is paused until the app is active
+    ///   again. Only `.background` abandons the start, returning to readiness.
+    func scenePhaseChanged(_ scene: ScenePhase) {
+        switch (scene, phase) {
+        case (.inactive, .recording), (.background, .recording):
             recorder?.note("App left the foreground; recording is partial.")
             finish()
+        case (.background, .starting):
+            stopCapture()
+            resetToIdle()
+        case (.inactive, .starting) where !framesSeen:
+            timer?.cancel()
+            timer = nil
+        case (.active, .starting) where !framesSeen:
+            scheduleNoFramesTimeout()
         default:
             break
         }
@@ -130,7 +171,14 @@ final class TestViewModel: ObservableObject {
     // MARK: - Provider events
 
     private func ingest(_ s: EyeMovementSample) {
-        if phase == .starting { beginRecording() }
+        if phase == .starting, !framesSeen {
+            // The camera is running; now give the user time to be found.
+            framesSeen = true
+            schedule(after: startupTimeout) { [weak self] in
+                if self?.phase == .starting { self?.fail(.noTrackedFace) }
+            }
+        }
+        if phase == .starting, s.isTracked { beginRecording() }
         guard phase == .recording else { return }
         if recorder?.record(s) == true, s.isTracked { trackedCount += 1 }
         if faceTracked != s.isTracked { faceTracked = s.isTracked }
@@ -153,7 +201,8 @@ final class TestViewModel: ObservableObject {
 
     private func beginRecording() {
         let t0 = now()
-        recorder          = SessionRecorder(startUptime: t0, duration: duration, stimulus: stimulus)
+        recorder          = SessionRecorder(startUptime: t0, duration: duration, stimulus: stimulus,
+                                            viewport: viewport)
         stimulusStartTime = t0
         phase             = .recording
         schedule(after: duration) { [weak self] in self?.finish() }
@@ -177,6 +226,21 @@ final class TestViewModel: ObservableObject {
     private func fail(_ error: GazeTrackingError) {
         stopCapture()
         phase = .failed(error.localizedDescription)
+    }
+
+    private func scheduleNoFramesTimeout() {
+        schedule(after: startupTimeout) { [weak self] in
+            if self?.phase == .starting { self?.fail(.noFramesReceived) }
+        }
+    }
+
+    private func resetToIdle() {
+        recorder          = nil
+        stimulusStartTime = nil
+        faceTracked       = false
+        trackedCount      = 0
+        framesSeen        = false
+        phase             = .idle
     }
 
     private func stopCapture() {

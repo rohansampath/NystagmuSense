@@ -33,6 +33,7 @@ struct StimulusEngine {
 
     /// Triangle wave: white → black over one half-cycle, then back.
     func backgroundGray(at elapsed: TimeInterval) -> Double {
+        if let gray = config.fixedBackgroundGray { return gray }
         let phase = (max(0, elapsed) / config.fadeHalfCycleSeconds)
             .truncatingRemainder(dividingBy: 2)
         return phase <= 1 ? 1 - phase : phase - 1

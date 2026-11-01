@@ -9,28 +9,47 @@ import SwiftUI
 
 struct RecordingStatusCard: View {
     let phase: TestViewModel.Phase
+    let isLandscape: Bool
     let faceTracked: Bool
     let trackedCount: Int
     let duration: TimeInterval
+    let stimulus: StimulusConfig
     let canRetryExport: Bool
+    let canTryAgain: Bool
+    let onStart: () -> Void
     let onRetryExport: () -> Void
+    let onTryAgain: () -> Void
     let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             switch phase {
-            case .idle, .starting:
-                Text("Starting camera…")
+            case .idle:
+                Label(isLandscape ? "Ready to record" : "Rotate your phone sideways",
+                      systemImage: "iphone.gen3.landscape")
+                    .font(.headline)
+                Text(isLandscape
+                     ? stimulus.participantInstruction
+                     : "Landscape mode is required. If the screen won't rotate, turn off Portrait Orientation Lock.")
+                Button("Start Recording", action: onStart)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isLandscape)
+                Button("Cancel", action: onClose)
+
+            case .starting:
+                Text("Finding your face…")
+                Text("Keep your face visible to the front camera.")
                 Button("Cancel", action: onClose)
 
             case .recording:
-                Text("Recording \(Int(duration)) s")
-                    .font(.headline)
-                Label(faceTracked ? "Face tracked" : "Face not detected",
-                      systemImage: faceTracked ? "eye" : "eye.slash")
-                    .foregroundStyle(faceTracked ? .green : .red)
-                Text("\(trackedCount) samples with face tracked").monospacedDigit()
-                Button("Cancel", action: onClose)
+                HStack(spacing: 16) {
+                    Text("Recording \(Int(duration)) s").font(.headline)
+                    Label(faceTracked ? "Face tracked" : "Face not detected",
+                          systemImage: faceTracked ? "eye" : "eye.slash")
+                        .foregroundStyle(faceTracked ? .green : .red)
+                    Text("\(trackedCount) tracked").monospacedDigit()
+                    Button("Cancel", action: onClose)
+                }
 
             case .finished(let s):
                 Text("Recording saved").font(.headline)
@@ -56,6 +75,9 @@ struct RecordingStatusCard: View {
                 HStack {
                     if canRetryExport {
                         Button("Retry Export", action: onRetryExport).buttonStyle(.borderedProminent)
+                    }
+                    if canTryAgain {
+                        Button("Try Again", action: onTryAgain).buttonStyle(.borderedProminent)
                     }
                     Button("Done", action: onClose).buttonStyle(.bordered)
                 }

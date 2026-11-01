@@ -30,7 +30,7 @@ function.
 | Component | Status |
 |---|---|
 | Menu → **Record 10 Seconds** → test screen | Works. The 30 s countdown screen is skipped for Deliverable 1 (`CountdownOverlay` kept, unused) |
-| Moving, fading stripe stimulus | Works. Logic moved to `StimulusEngine`, same appearance |
+| Moving stripe stimulus | White bars on a fixed black background, gated on landscape and face tracking |
 | 10 s raw ARKit eye-tracking recording | Implemented, **not yet verified on a physical iPhone** |
 | CSV + JSON export (share sheet / Files app) | Implemented, **not yet verified on device** |
 | Python plotting (`scripts/plot_gaze.py`) | Works on CSVs from the real exporter (tested with synthetic data) |
@@ -61,18 +61,31 @@ only Deliverable 1 (10 s recording + export + plot) is implemented.
 
 ## Record 10 seconds
 
-1. Put the phone on a stand at a comfortable viewing distance, in portrait, with
-   your face fully visible in good light. Tap **Record 10 Seconds**.
-2. The stripe stimulus appears with a status card at the top. "Starting camera…"
-   switches to **Recording 10 s** once the first camera frame arrives. That's
-   when the stimulus starts moving and t = 0.
-3. Watch the stripes. The card shows *Face tracked* or *Face not detected* live.
-4. After ~10 s the stimulus disappears and the card shows **Recording saved** with
-   sample count and observed rate. **Cancel** (or leaving the screen) discards the
-   recording. If the app leaves the foreground mid-recording, it stops and saves the
-   partial data, with the reason in the sidecar's `issues`. If saving fails, the card
-   offers **Retry Export** (the samples stay in memory until you leave the screen). Zero tracked samples counts as a
-   failed capture even though the file is saved.
+1. Tap **Record 10 Seconds**, then rotate the phone into landscape. If the screen
+   won't rotate, turn off Portrait Orientation Lock. **Start Recording** stays
+   disabled until the app is displayed in landscape.
+2. Keep your face fully visible to the front camera in good light, then tap
+   **Start Recording**. The first time, iOS asks for camera access; this doesn't
+   fail the session. From Start until the session ends, the screen is locked to the
+   landscape side you're holding, so it can't rotate mid-trial. The static
+   stimulus frame is already showing, and once a face is tracked the stimulus starts
+   moving and the recording clock starts together.
+3. Keep your head still and watch the white vertical bars move rightward over a
+   fixed black background (90 SwiftUI points/s). The compact status card shows
+   face-tracking status while leaving most of the stimulus visible.
+4. After ~10 s, the stimulus disappears and **Recording saved** shows sample count
+   and observed rate. Rotating or resizing the stimulus surface, or leaving the
+   foreground, stops capture and saves partial data with a reason in `issues`.
+   **Cancel** discards the recording. Failed exports offer **Retry Export**; other
+   failures (no camera frames within 5 s, no face found within 5 s of the first
+   frame, camera denied) offer **Try Again**. Backgrounding the app before a face
+   is found returns to the Ready state.
+
+The sidecar records the full stimulus surface size (`stimulusViewport`, in
+points) and stripe/background grey levels, alongside speed, direction and spacing.
+The default capture uses constant contrast; an explicitly configured experiment
+can set `fixedBackgroundGray` to nil to enable the legacy background fade.
+These changes support repeatable data collection; OKN detection remains disabled.
 
 ## Export
 
@@ -99,7 +112,15 @@ OKN. Interpret it by eye. It refuses empty, malformed, or time-decreasing files
 rather than reordering or interpolating, and exits with an error (no PNG) if no sample
 has a tracked face.
 
-## CSV format (schema v1)
+## CSV format (schema v2)
+
+`schemaVersion` in the sidecar tells recordings apart:
+
+- **v1** (`trials/trackingtest1`–`2`): black bars on a white→black fading
+  background, so `stim_bg_gray` changes over time.
+- **v2**: the sidecar adds `stimulusViewport`, `stimulus.fixedBackgroundGray` and
+  `stimulus.stripeGray`. The default stimulus is white bars on a constant black
+  background, so `stim_bg_gray` is constant (0). CSV columns are unchanged.
 
 | column | meaning | units |
 |---|---|---|
@@ -139,5 +160,5 @@ python3 -m unittest discover scripts/tests
   latency aren't measured or compensated.
 - Stimulus speed and stripe size are in screen points, so not physically
   standardised across devices. Screen brightness isn't controlled.
-- The grating isn't shown until the first camera frame arrives (static before
-  that), so the first ~0.5–1 s after tapping is not part of the session.
+- The grating and recording start only after the first tracked face frame arrives.
+  Startup time is not part of the session.
