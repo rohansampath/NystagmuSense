@@ -22,6 +22,7 @@ NystagmuSense/
 ├── Networking/APIClient.swift  unused placeholder (api.example.com); not called anywhere
 └── Utils/PipeForward.swift
 scripts/plot_gaze.py          offline plotting of exported recordings
+scripts/detect_okn.py         offline candidate OKN detection (not wired into the app)
 NystagmuSenseTests/           Swift Testing unit tests + MockGazeProvider
 ```
 
@@ -132,9 +133,13 @@ in each sidecar's `columns` key and in the README.
 > eye's *position* in the face and barely changes with gaze. Velocities and
 > OKN decisions derived from it weren't meaningful.
 
-## Future OKN detection (integration point)
+## Offline OKN detection and future app integration
 
-Input: `[RecordedSample]` (from `SessionRecorder.samples`) or the exported CSV.
+The current offline prototype is `scripts/detect_okn.py`; see the README for
+commands, timestamp/gap handling and known specificity limits. It has not been
+validated as a physiological OKN detector or ported into the iOS recording flow.
+
+Future app input: `[RecordedSample]` (from `SessionRecorder.samples`) or the exported CSV.
 Each sample has `t`, the raw `EyeMovementSample`, and the scheduled
 `StimulusSnapshot`. Planned pipeline, as pure Swift functions or structs in
 `Services/Analysis/` (no SwiftUI, ARKit or Core Data):
@@ -144,8 +149,8 @@ Each sample has `t`, the raw `EyeMovementSample`, and the scheduled
   → slow/fast phase classification → OKN events → tracking onset/offset → threshold estimation
 ```
 
-Prototype offline in Python on exported CSVs first, then port the validated
-algorithm. Wire it in by having `TestViewModel.finish()` pass
+Validate the existing offline Python prototype on labelled recordings before
+porting it into the app. Wire it in by having `TestViewModel.finish()` pass
 `recorder.samples` to the analyser *after* export, so a failed or absent
 analysis never blocks data capture.
 

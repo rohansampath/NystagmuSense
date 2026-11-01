@@ -2,24 +2,32 @@
 
 ---
 
-Swift Application that can test Contrast Sensitivity Function.
+A Swift research application exploring smartphone eye tracking and optokinetic
+nystagmus (OKN), with the long-term goal of studying contrast sensitivity.
 
-Optokinetic nystagmus is a reflex of the nervous system when a person is tracking an object
-across their visual field. This tracking leads to abnormal movement of the eyes, a smooth tracking
-followed by a series of twitches in the contralateral direction. This phenomenon can be induced by
-physical stimuli, opening doors for potential uses in an optometry clinic. One potential use can be seen in
-measuring someone’s contrast sensitivity function, a robust, but often overlooked, marker of visual
-function. The machine used to measure this function is a visual field machine, which is extremely costly
-to maintain from a money and space perspective. Using a dynamic stimulus on a smartphone, we can
-induce an optokinetic reflex in the user, and using eye tracking, measure the exact point they are no longer
-induced. Advances in camera technology, specifically on mobile phones, have allowed for eye tracking to
-become a viable method to do this. The app then takes the moment when the user stops tracking the
-phone and compares it with the luminance value of the screen before. This value is from 1 to 100, and
-after taking the common log of that value, it directly correlates to the user’s expected contrast sensitivity
-function.
+Optokinetic nystagmus is a reflex of the nervous system in response to patterns
+moving across the visual field. This response consists of a smooth tracking
+movement in the direction of the stimulus, followed by a rapid resetting movement
+in the opposite direction. This is a normal visual reflex. The phenomenon can be
+induced by moving visual stimuli, opening doors for potential uses in an optometry
+clinic. One potential use is studying contrast sensitivity, an important marker of
+visual function. Research has demonstrated OKN-based estimates of contrast
+sensitivity under controlled, calibrated conditions; see
+[Dakin and Turnbull (2016)](https://www.nature.com/articles/srep34514).
+
+Using a dynamic stimulus on a smartphone, we aim to induce an optokinetic response
+and record eye movements using the front camera. Advances in camera technology,
+specifically on mobile phones, make this an approach worth investigating. The
+current app presents moving bars and exports raw ARKit eye-tracking data; an
+offline Savitzky–Golay-based detector identifies candidate tracking/reset patterns.
+It does not yet measure the exact point at which OKN stops or calculate a
+contrast-sensitivity function. That would require calibrated stimulus contrast,
+threshold measurements across spatial frequencies, and validation against a
+reference method. A screen shade from 1 to 100, or its common logarithm, is not
+itself a calibrated contrast-sensitivity measurement.
 
 ---
-##### Reach out to rrs248@cornell.edu for access - Heuristic Signalling Algorithm under development
+##### Reach out to rrs248@cornell.edu for access - Research prototype; candidate OKN detection under development
 ---
 
 ## Current status
@@ -31,31 +39,34 @@ function.
 |---|---|
 | Menu → **Record 10 Seconds** → test screen | Works. The 30 s countdown screen is skipped for Deliverable 1 (`CountdownOverlay` kept, unused) |
 | Moving stripe stimulus | White bars on a fixed black background, gated on landscape and face tracking |
-| 10 s raw ARKit eye-tracking recording | Implemented, **not yet verified on a physical iPhone** |
-| CSV + JSON export (share sheet / Files app) | Implemented, **not yet verified on device** |
-| Python plotting (`scripts/plot_gaze.py`) | Works on CSVs from the real exporter (tested with synthetic data) |
+| 10 s raw ARKit eye-tracking recording | Earlier app recordings are checked into `trials/`; the newly merged landscape/permission/retry flow passes simulator tests and needs a fresh phone run |
+| CSV + JSON export (share sheet / Files app) | Real schema-v1 device exports are checked in; new recordings use schema v2 with surface size and stripe/background settings |
+| Python plotting (`scripts/plot_gaze.py`) | Tested on synthetic data and checked-in real device recordings |
 | OKN detection | **Candidate only, offline:** `scripts/detect_okn.py` (Savitzky–Golay baseline, tuned on synthetic data). Not in the app; legacy Swift heuristic in `Services/Analysis/` stays disabled |
 | Contrast-sensitivity score | **Removed from the test flow.** "Past Tests" shows only legacy prototype scores |
 
 Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 The full research roadmap is in [NYSTAGMUSENSE_PROJECT_SPEC.md](NYSTAGMUSENSE_PROJECT_SPEC.md);
-only Deliverable 1 (10 s recording + export + plot) is implemented.
+the recording/export/plot workflow and an offline candidate detector are implemented.
+In-app OKN detection and contrast-sensitivity measurement remain future work.
 
 ## Requirements
 
-- Xcode 16.4+ with the iOS 18.5 platform installed (deployment target is iOS 18.5)
+- Xcode 16.4+ with an iOS SDK supporting the iOS 18.5 deployment target, and
+  an installed iOS Simulator runtime for simulator tests
 - An iPhone/iPad with a TrueDepth (Face ID) front camera. ARKit face tracking
   doesn't run in the Simulator, which can only show the "unsupported device" path.
-- No third-party dependencies. Apple frameworks only: SwiftUI, ARKit, Core Data.
-- Plotting: Python 3.9+ and `matplotlib` (`pip install -r scripts/requirements.txt`)
+- iOS app: no third-party dependencies. Apple frameworks include SwiftUI, ARKit
+  and Core Data.
+- Offline analysis on a computer: Python 3.9+ with `matplotlib`, `numpy` and
+  `scipy` (`python3 -m pip install -r scripts/requirements.txt`)
 
 ## Build and run on an iPhone
 
-1. Open `NystagmuSense.xcodeproj`.
+1. Use the merged `main` branch and open `NystagmuSense.xcodeproj`.
 2. Under *Signing & Capabilities* for the `NystagmuSense` target, pick your team
-   (the project currently points at team `L5VAJVH6AP`). If signing complains about
-   the iCloud/Push entitlements, remove those capabilities locally; the app
-   doesn't use them.
+   (the project currently points at team `L5VAJVH6AP`). The unused iCloud/Push
+   capabilities have already been removed.
 3. Connect the iPhone, select it as the run destination, and press ⌘R.
 4. Accept the camera permission prompt on first use.
 
@@ -74,8 +85,9 @@ only Deliverable 1 (10 s recording + export + plot) is implemented.
    fixed black background (90 SwiftUI points/s). The compact status card shows
    face-tracking status while leaving most of the stimulus visible.
 4. After ~10 s, the stimulus disappears and **Recording saved** shows sample count
-   and observed rate. Rotating or resizing the stimulus surface, or leaving the
-   foreground, stops capture and saves partial data with a reason in `issues`.
+   and observed rate. If the surface changes despite the orientation lock (for
+   example, iPad multitasking), or the app becomes inactive during recording,
+   capture stops and saves partial data with a reason in `issues`.
    **Cancel** discards the recording. Failed exports offer **Retry Export**; other
    failures (no camera frames within 5 s, no face found within 5 s of the first
    frame, camera denied) offer **Try Again**. Backgrounding the app before a face
@@ -85,7 +97,8 @@ The sidecar records the full stimulus surface size (`stimulusViewport`, in
 points) and stripe/background grey levels, alongside speed, direction and spacing.
 The default capture uses constant contrast; an explicitly configured experiment
 can set `fixedBackgroundGray` to nil to enable the legacy background fade.
-These changes support repeatable data collection; OKN detection remains disabled.
+These changes support repeatable data collection. OKN detection is available
+offline in Python; it is not enabled in the iOS app.
 
 ## Export
 
@@ -98,7 +111,7 @@ These changes support repeatable data collection; OKN detection remains disabled
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r scripts/requirements.txt
+python3 -m pip install -r scripts/requirements.txt
 python3 scripts/plot_gaze.py path/to/NS_20261024-101500_ABCD1234.csv
 # → prints stats, writes NS_..._ABCD1234.png next to the CSV
 #   --output file.png to choose the path, --show to open an interactive window
@@ -115,12 +128,32 @@ has a tracked face.
 ## Candidate OKN detection (offline)
 
 ```bash
-python3 scripts/detect_okn.py path/to/NS_....csv [--plot okn.png]
+python3 scripts/detect_okn.py path/to/NS_20261024-101500_ABCD1234.csv --plot okn.png
+# Omit --plot okn.png for the text report only.
 ```
 
+To test a new phone recording:
+
+1. Record the moving stimulus as described above, then export **both** CSV and
+   JSON to the computer where the Python environment is set up.
+2. Keep the original files together. Inspect `issues`, tracked sample count and
+   observed rate in the JSON. Partial sessions or poor face tracking need review.
+3. Run `plot_gaze.py` on the CSV to inspect the raw traces, then run
+   `detect_okn.py` with `--plot` to compare candidate slow/fast phases with them.
+   The detector reads the CSV; retain the JSON for stimulus/device context.
+4. Record what the participant was doing, the phone model, viewing distance and
+   lighting. Collect separate watch-the-bars, fixation and deliberate-saccade
+   recordings; do not treat a deliberate movement as a confirmed OKN response.
+
+New phone recordings can now be tested with this SG-based workflow. The analysis
+runs on an exported recording on a computer, not live on the phone. The method estimates
+eye velocity and flags candidate patterns; it is not a trained prediction model.
+A positive window does not establish true OKN, and no windows does not prove that
+OKN was absent, especially when little usable data remains.
+
 A baseline, interpretable detector (no ML). It converts each eye's direction vector to a
-horizontal angle, masks untracked samples and blinks (padded 50 ms), differentiates with a
-local polynomial derivative (5 samples, polyorder 2; equivalent to Savitzky–Golay
+horizontal angle, masks untracked samples and blinks (padded 50 ms), and estimates
+velocity with a local polynomial derivative (5 samples, polyorder 2; equivalent to Savitzky–Golay
 on uniform samples) using the actual camera timestamps, then finds fast
 phases (|v| > 40 deg/s), slow phases (line fits ≥ 0.15 s) and OKN beats (a slow phase followed
 within 0.1 s by an opposite-direction fast phase). OKN is a candidate where a 2 s window
@@ -179,21 +212,47 @@ observed rate, stimulus settings, column definitions, and any capture issues.
 
 ## Tests
 
-```bash
-# Swift unit tests (needs an installed iOS Simulator runtime)
-xcodebuild test -project NystagmuSense.xcodeproj -scheme NystagmuSense \
-  -destination 'platform=iOS Simulator,name=iPhone 16'
+Run Python commands from the repository root after activating the environment
+created above:
 
-# Python script tests (plot_gaze tests are stdlib only; detect_okn tests need numpy + scipy)
-pip install -r scripts/requirements.txt
-python3 -m unittest discover scripts/tests
+```bash
+python3 -m pip install -r scripts/requirements.txt
+python3 -m unittest discover scripts/tests -v
+
+# Smoke tests on real device exports; output paths keep source trials unchanged.
+python3 scripts/plot_gaze.py trials/trackingtest1/trackingtest1.csv --output /tmp/trackingtest1-raw.png
+python3 scripts/detect_okn.py trials/trackingtest1/trackingtest1.csv --plot /tmp/trackingtest1-okn.png
+python3 scripts/detect_okn.py trials/trackingtest2/trackingtest2.csv --plot /tmp/trackingtest2-okn.png
 ```
+
+With the current defaults, `trackingtest1` has 0 fast phases and no candidate
+windows; `trackingtest2` has 27 fast phases and 9 beats, yielding one candidate
+interval at approximately 0.14–5.14 s. These are reproducibility checks, not
+validated labels or accuracy measurements.
+
+For Swift tests, select the installed Xcode toolchain and simulator. The device
+name below is an example; replace it with one listed by `-showdestinations`:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+xcodebuild -showdestinations -project NystagmuSense.xcodeproj -scheme NystagmuSense
+xcodebuild test -project NystagmuSense.xcodeproj -scheme NystagmuSense \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
+  -parallel-testing-enabled NO \
+  -only-testing:NystagmuSenseTests \
+  -only-testing:NystagmuSenseUITests/NystagmuSenseUITests/testRecordingRequiresLandscape
+```
+
+The merged implementation passed **42 Swift unit tests, 1 landscape UI test and
+30 Python tests**. The simulator verifies lifecycle/UI logic with mock gaze;
+TrueDepth capture and perceived stimulus motion require a physical phone.
 
 ## Known limitations
 
-- Nothing in the recording path has run on a physical device yet. The eye-direction
-  sign convention, real sample rate (ARKit face tracking is nominally 60 Hz), and
-  `lookAtPoint` behaviour still need to be checked.
+- Earlier schema-v1 phone recordings demonstrate capture/export at about 60 Hz
+  (see [trials/README.md](trials/README.md)). They do not validate the new
+  landscape stimulus flow, gaze calibration, or the detector. Confirm the newly
+  merged behavior on a physical phone; the eye-direction sign remains unverified.
 - Signals are raw ARKit model outputs in face coordinates. There's no calibration,
   no conversion to degrees of visual angle, and head movement isn't removed
   (head pose isn't recorded yet).
@@ -201,5 +260,7 @@ python3 -m unittest discover scripts/tests
   latency aren't measured or compensated.
 - Stimulus speed and stripe size are in screen points, so not physically
   standardised across devices. Screen brightness isn't controlled.
-- The grating and recording start only after the first tracked face frame arrives.
-  Startup time is not part of the session.
+- A static grating appears before capture. Motion and recording start together
+  after the first tracked face frame arrives; startup time is not recorded.
+- Default recordings keep contrast constant. They do not sweep contrast to find
+  a threshold or measure a CSF; the legacy shade-based score is not used.
