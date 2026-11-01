@@ -16,8 +16,8 @@ ARKit signals:
    (Savitzky-Golay on uniform data), separately per contiguous valid run.
 4. Fast phases: runs where |velocity| exceeds a threshold; nearby same-direction
    runs are merged.
-5. Slow phases: valid segments between fast phases; velocity = slope of a
-   straight-line fit of angle vs time.
+5. Slow phases: fit inter-fast-phase segments; reject poor line fits and
+   direction-inconsistent drift before pairing beats.
 6. OKN beat: a slow phase followed shortly by an opposite-direction fast phase.
 7. OKN windows: sliding windows with enough direction-consistent beats, merged
    into candidate onset/offset intervals.
@@ -37,7 +37,7 @@ import numpy as np
 from scipy.signal import savgol_filter
 
 REQUIRED = ["t_s", "tracked", "left_dir_x", "left_dir_z", "right_dir_x", "right_dir_z"]
-OPTIONAL = ["blink_left", "blink_right", "stim_displacement_pt"]
+OPTIONAL = ["blink_left", "blink_right", "stim_displacement_pt", "stim_bg_gray"]
 SIGN_CAVEAT = "eye-angle sign convention (+ = subject's right) is UNVERIFIED on device"
 GAP_FACTOR = 2.5  # same missing-frame boundary as plot_gaze.py
 
@@ -52,6 +52,8 @@ class Params:
     merge_gap_ms: float = 50         # merge same-direction fast runs closer than this
     min_slow_s: float = 0.15         # minimum slow-phase duration of valid data
     min_slow_velocity: float = 1     # deg/s, for a slow phase to count in a beat
+    min_slow_r2: float = 0.8         # provisional fit-quality gate, not validated
+    min_slow_direction_agreement: float = 0.8  # time fraction of velocity with fit's sign
     beat_max_gap_s: float = 0.1      # slow-phase end → opposite fast-phase start
     window_s: float = 2.0
     step_s: float = 0.5
@@ -81,6 +83,8 @@ def validate_params(p):
         raise SessionError("min_beats must be a positive integer")
     if not 0 <= p.blink_threshold <= 1 or not 0.5 < p.min_agreement <= 1:
         raise SessionError("blink_threshold must be in [0, 1] and min_agreement in (0.5, 1]")
+    if not 0 <= p.min_slow_r2 <= 1 or not 0 <= p.min_slow_direction_agreement <= 1:
+        raise SessionError("slow-phase quality thresholds must be in [0, 1]")
 
 
 # ---------------------------------------------------------------- loading
@@ -218,10 +222,16 @@ def detect_fast_phases(t, angle, vel, valid, p):
     return sorted(phases, key=lambda f: f["start"])
 
 
-def detect_slow_phases(t, angle, valid, fast_phases, p):
-    # A line-fit slope is only a candidate drift estimate. In particular, a
-    # voluntary movement/settling artifact may fit here; no fit-quality or
-    # stimulus-locking validation has been established on labelled recordings.
+def detect_slow_phases(t, angle, valid, fast_phases, p, velocity=None):
+    """Keep fit diagnostics for all candidates; only qualified fits can form beats.
+
+    A slope alone can hide several reversals or subthreshold saccades. R² checks
+    how well a line describes the segment, and velocity sign agreement checks
+    whether it actually drifts in that direction. These provisional gates need
+    labelled data: curved/noisy true slow phases may also be rejected.
+    """
+    if velocity is None:
+        velocity = sg_velocity(angle, valid, float(np.median(np.diff(t))), p, t=t)
     in_fast = np.zeros(len(t), dtype=bool)
     for f in fast_phases:
         in_fast[f["i0"]:f["i1"]] = True
@@ -230,15 +240,34 @@ def detect_slow_phases(t, angle, valid, fast_phases, p):
         if t[b - 1] - t[a] < p.min_slow_s or b - a < 3:
             continue
         slope, intercept = np.polyfit(t[a:b], angle[a:b], 1)
+        fitted = slope * t[a:b] + intercept
+        residual = float(np.sum((angle[a:b] - fitted)**2))
+        total = float(np.sum((angle[a:b] - np.mean(angle[a:b]))**2))
+        r2 = max(0.0, 1 - residual / total) if total > 1e-12 else 0.0
+        # Trapezoidal sample support weights avoid overweighting densely
+        # sampled portions when camera timestamps jitter.
+        weights = np.r_[np.diff(t[a:b]), 0] + np.r_[0, np.diff(t[a:b])]
+        finite = np.isfinite(velocity[a:b])
+        agreement = float(np.sum(weights * finite * (velocity[a:b] * slope > 0)) / weights.sum())
+        reasons = []
+        if abs(slope) < p.min_slow_velocity:
+            reasons.append("too_slow")
+        if r2 < p.min_slow_r2:
+            reasons.append("poor_line_fit")
+        if agreement < p.min_slow_direction_agreement:
+            reasons.append("inconsistent_direction")
+        if not np.all(finite):
+            reasons.append("missing_velocity")
         phases.append(dict(start=t[a], end=t[b - 1], velocity=float(slope),
-                           intercept=float(intercept)))
+                           intercept=float(intercept), r2=r2, direction_agreement=agreement,
+                           accepted=not reasons, rejection_reasons=reasons))
     return phases
 
 
 def detect_beats(slow_phases, fast_phases, p):
     beats = []
     for s in slow_phases:
-        if abs(s["velocity"]) < p.min_slow_velocity:
+        if not s.get("accepted", True) or abs(s["velocity"]) < p.min_slow_velocity:
             continue
         direction = int(np.sign(s["velocity"]))
         for f in fast_phases:
@@ -322,7 +351,7 @@ def analyse(data, p):
         ts, angles, velocities = t[a:b], angle[a:b], vel[a:b]
         mask = np.ones(b - a, dtype=bool)
         fs = detect_fast_phases(ts, angles, velocities, mask, p)
-        ss = detect_slow_phases(ts, angles, mask, fs, p)
+        ss = detect_slow_phases(ts, angles, mask, fs, p, velocity=velocities)
         bs = detect_beats(ss, fs, p)
         ws = okn_windows(ts, bs, p)
         intervals.extend(merge_windows(ws, bs))
@@ -336,7 +365,7 @@ def analyse(data, p):
         windows.extend(ws)
     return dict(t=t, dt=dt, angle=angle, valid=valid, velocity=vel, fast=fast, slow=slow,
                 beats=beats, windows=windows, intervals=intervals,
-                stimulus=stimulus_direction(data))
+                stimulus=stimulus_direction(data), background=data.get("stim_bg_gray"))
 
 
 def direction_name(d):
@@ -352,7 +381,9 @@ def print_report(r, p):
     print(f"dt (median):       {1000 * r['dt']:.2f} ms")
     print(f"SG window:         {p.sg_window} samples (~{1000 * (p.sg_window - 1) * r['dt']:.0f} ms span), polyorder {p.sg_polyorder}")
     print(f"fast phases:       {len(r['fast'])} ({right} rightward, {len(r['fast']) - right} leftward)")
-    print(f"slow phases:       {len(r['slow'])}")
+    accepted = sum(s["accepted"] for s in r["slow"])
+    print(f"slow-phase fits:   {len(r['slow'])} ({accepted} accepted, {len(r['slow']) - accepted} rejected)")
+    print(f"quality gates:     R² >= {p.min_slow_r2:g}, direction fraction >= {p.min_slow_direction_agreement:g} (provisional)")
     print(f"beats:             {len(r['beats'])}")
     if r["beats"]:
         v = np.median([b["slow_velocity"] for b in r["beats"]])
@@ -360,6 +391,18 @@ def print_report(r, p):
         print(f"beat rate:         {len(r['beats']) / span:.2f} /s over {span:.2f} s")
     print(f"stimulus:          {direction_name(r['stimulus'])} (stim_displacement_pt)")
     print(f"note:              {SIGN_CAVEAT}")
+    print("note:              candidate windows are not validated OKN onset/offset or a score")
+    for s in r["slow"]:
+        if not s["accepted"]:
+            print(f"rejected slow fit: {s['start']:.3f}–{s['end']:.3f} s, "
+                  f"R² {s['r2']:.2f}, direction fraction {s['direction_agreement']:.2f}: "
+                  + ", ".join(s["rejection_reasons"]))
+    for i, beat in enumerate(r["beats"], 1):
+        s = beat["slow"]
+        print(f"beat {i}:            slow {s['start']:.3f}–{s['end']:.3f} s, "
+              f"reset {beat['fast']['start']:.3f}–{beat['fast']['end']:.3f} s, "
+              f"SPV {s['velocity']:+.2f} deg/s, R² {s['r2']:.2f}, "
+              f"direction fraction {s['direction_agreement']:.2f}")
     if not np.any(np.isfinite(r["velocity"])):
         print("note:              insufficient usable data for velocity estimation")
     if not r["intervals"]:
@@ -372,7 +415,7 @@ def print_report(r, p):
             match = "matches stimulus"
         else:
             match = "OPPOSITE to stimulus"
-        print(f"candidate OKN {k}:   {iv['onset']:.2f}–{iv['offset']:.2f} s, {iv['beats']} beats, "
+        print(f"candidate window {k}: {iv['onset']:.2f}–{iv['offset']:.2f} s, {iv['beats']} beats, "
               f"slow phase {direction_name(iv['direction'])} "
               f"(median {iv['median_slow_velocity']:+.1f} deg/s), {match} [sign unverified]")
 
@@ -384,32 +427,53 @@ def plot(r, p, out_path, title):
 
     t = r["t"]
     angle = np.where(r["valid"], r["angle"], np.nan)
-    fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(11, 6.5))
+    has_background = r.get("background") is not None
+    fig, axes = plt.subplots(3 if has_background else 2, 1, sharex=True,
+                             figsize=(11, 8 if has_background else 6.5),
+                             gridspec_kw={"height_ratios": [2, 2, 1] if has_background else [1, 1]})
+    ax1, ax2 = axes[:2]
     gaps = np.flatnonzero(np.diff(t) > GAP_FACTOR * r["dt"]) + 1
     plot_t = np.insert(t, gaps, np.nan)
     ax1.plot(plot_t, np.insert(angle, gaps, np.nan), color="0.3", linewidth=0.9, label="eye angle")
-    for i, s in enumerate(r["slow"]):
+    seen = set()
+    for s in r["slow"]:
         ts = np.array([s["start"], s["end"]])
-        ax1.plot(ts, s["velocity"] * ts + s["intercept"], color="tab:blue", linewidth=2,
-                 label="slow-phase fit" if i == 0 else None)
+        label = "accepted slow fit" if s["accepted"] else "rejected slow fit"
+        ax1.plot(ts, s["velocity"] * ts + s["intercept"],
+                 color="tab:blue" if s["accepted"] else "0.6",
+                 linestyle="-" if s["accepted"] else "--",
+                 linewidth=2 if s["accepted"] else 1,
+                 label=label if label not in seen else None)
+        seen.add(label)
+    for i, beat in enumerate(r["beats"]):
+        at = int(np.searchsorted(t, beat["time"]))
+        ax1.scatter(t[at], angle[at], color="tab:green", marker="o", s=25, zorder=5,
+                    label="accepted beat (reset start)" if i == 0 else None)
+        ax1.annotate(str(i + 1), (t[at], angle[at]), xytext=(4, 6),
+                     textcoords="offset points", color="tab:green", fontsize=7)
     for ax in (ax1, ax2):
         for i, f in enumerate(r["fast"]):
             ax.axvspan(f["start"], f["end"] + r["dt"], color="tab:red", alpha=0.25, linewidth=0,
                        label="fast phase" if i == 0 and ax is ax1 else None)
     for i, iv in enumerate(r["intervals"]):
         ax1.axvspan(iv["onset"], iv["offset"], ymin=0.95, ymax=1.0, color="tab:green",
-                    label="candidate OKN" if i == 0 else None)
+                    label="candidate window support" if i == 0 else None)
     ax1.set_ylabel("horizontal eye angle (deg)\n+ = right, UNVERIFIED")
-    ax1.legend(loc="upper right", fontsize="small")
-    ax1.set_title(f"{title}\ncandidate OKN detection on raw, uncalibrated ARKit signals")
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", fontsize="small", ncol=3)
+    ax1.set_title(f"{title}\nprovisional OKN candidates; sign unverified, no score")
     ax2.plot(plot_t, np.insert(r["velocity"], gaps, np.nan), color="0.3", linewidth=0.9)
     for y in (p.fast_threshold, -p.fast_threshold):
         ax2.axhline(y, color="tab:red", linestyle="--", linewidth=0.8)
     ax2.set_ylabel("SG velocity (deg/s)")
-    ax2.set_xlabel("time since session start (s)")
-    for ax in (ax1, ax2):
+    if has_background:
+        axes[2].plot(plot_t, np.insert(r["background"], gaps, np.nan), color="tab:purple")
+        axes[2].set_ylabel("scheduled background\nsRGB value")
+        axes[2].set_ylim(-0.05, 1.05)
+    axes[-1].set_xlabel("time since session start (s)")
+    for ax in axes:
         ax.grid(alpha=0.3)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 

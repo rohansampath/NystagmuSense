@@ -233,6 +233,63 @@ class DetectOKNTests(unittest.TestCase):
         self.assertEqual(r["slow"], [])
         self.assertEqual(r["intervals"], [])
 
+    def test_slow_fit_cannot_average_across_repeated_reversals(self):
+        t = np.arange(120) / RATE
+        # Overall drift is nonzero, but calling all of this a slow phase hides
+        # several large direction reversals under the old 40 deg/s threshold.
+        angle = 3 * t + 1.5 * np.sin(2 * np.pi * 2 * t)
+        velocity = 3 + 6 * np.pi * np.cos(2 * np.pi * 2 * t)
+        phases = detect_okn.detect_slow_phases(t, angle, np.ones(len(t), dtype=bool),
+                                              [], detect_okn.Params(), velocity=velocity)
+        self.assertEqual(len(phases), 1)
+        self.assertFalse(phases[0]["accepted"])
+        self.assertIn("inconsistent_direction", phases[0]["rejection_reasons"])
+        self.assertEqual(detect_okn.detect_beats(phases, [dict(start=t[-1] + 0.02,
+                         direction=-1)], detect_okn.Params()), [])
+
+    def test_monotonic_curve_can_be_rejected_as_a_poor_linear_fit(self):
+        t = np.linspace(0, 1, 61)
+        angle = 4 * t**6
+        velocity = 24 * t**5
+        phases = detect_okn.detect_slow_phases(t, angle, np.ones(len(t), dtype=bool),
+                                              [], detect_okn.Params(), velocity=velocity)
+        self.assertIn("poor_line_fit", phases[0]["rejection_reasons"])
+
+    def test_uniform_drifts_pass_quality_gates_in_both_directions(self):
+        t = np.arange(30) / RATE
+        for direction in (-1, 1):
+            angle = direction * 10 * t
+            phases = detect_okn.detect_slow_phases(t, angle, np.ones(len(t), dtype=bool),
+                                                  [], detect_okn.Params())
+            self.assertTrue(phases[0]["accepted"])
+            self.assertAlmostEqual(phases[0]["r2"], 1)
+            self.assertAlmostEqual(phases[0]["direction_agreement"], 1)
+
+    def test_synthetic_okn_remains_detected_across_noise_seeds(self):
+        for seed in range(5):
+            with self.subTest(seed=seed):
+                r, _ = self.run_detector(synthetic_csv(okn_angle, seed=seed))
+                self.assertGreaterEqual(len(r["beats"]), 12)
+                self.assertTrue(r["intervals"])
+
+    def test_rejected_phases_are_auditable_in_report(self):
+        r, _ = self.run_detector(synthetic_csv(saccade_angle))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            detect_okn.print_report(r, detect_okn.Params())
+        self.assertIn("rejected", out.getvalue())
+        self.assertIn("provisional", out.getvalue())
+
+    def test_background_display_values_are_loaded_for_the_diagnostic_plot(self):
+        r, _ = self.run_detector(synthetic_csv(okn_angle))
+        np.testing.assert_array_equal(r["background"], np.ones(int(DURATION * RATE)))
+
+    def test_invalid_quality_thresholds_fail_cleanly(self):
+        _, path = self.run_detector(synthetic_csv(okn_angle))
+        for flag in ("--min-slow-r2", "--min-slow-direction-agreement"):
+            with self.subTest(flag=flag), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(detect_okn.main([path, flag, "1.1"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
