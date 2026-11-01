@@ -40,6 +40,7 @@ struct StimulusEngine {
     }
 
     func displacement(at elapsed: TimeInterval) -> Double {
+        if config.trialMode == .fixationStillStripes { return 0 }
         let sign: Double = config.direction == .rightward ? 1 : -1
         return sign * config.speedPointsPerSecond * max(0, elapsed)
     }
@@ -52,6 +53,14 @@ struct StimulusEngine {
 
     func pitch(viewWidth: CGFloat) -> CGFloat {
         stripeWidth(viewWidth: viewWidth) * CGFloat(config.pitchToWidthRatio)
+    }
+
+    /// The fixation dot's bounding box, exactly centred in a view of `size`;
+    /// nil for trials without a dot. It never moves.
+    func fixationDotRect(in size: CGSize) -> CGRect? {
+        guard config.trialMode.showsFixationDot else { return nil }
+        let d = CGFloat(StimulusConfig.fixationDotDiameterPoints)
+        return CGRect(x: size.width / 2 - d / 2, y: size.height / 2 - d / 2, width: d, height: d)
     }
 
     /// Left edges of every stripe to draw. Starts a few pitches off-screen so

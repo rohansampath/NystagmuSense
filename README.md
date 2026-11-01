@@ -87,10 +87,29 @@ The default capture uses constant contrast; an explicitly configured experiment
 can set `fixedBackgroundGray` to nil to enable the legacy background fade.
 These changes support repeatable data collection; OKN detection remains disabled.
 
+## Fixation-control trials
+
+Two extra menu buttons run the same 10 s flow (landscape, start on the first
+tracked frame, status card, export, cancel, retry) with a control stimulus. In
+both, the subject keeps looking at a solid **red dot** (12 pt diameter, 1.5 pt dark
+outline) fixed at the exact centre of the screen, drawn over the stripes for the
+whole trial:
+
+| Button | `stimulus.trialMode` | File suffix | Stripes | What it's for |
+|---|---|---|---|---|
+| **Record 10 Seconds** | `okn` | `_okn` | moving, no dot (unchanged) | the OKN trial |
+| **Control: Dot + Moving Stripes** | `fixationMovingStripes` | `_fixmove` | same stripes and motion as `okn` | how much OKN breaks through while holding gaze on a fixed target |
+| **Control: Dot + Still Stripes** | `fixationStillStripes` | `_fixstill` | same stripes, speed 0 (`stim_displacement_pt` stays 0) | baseline for what a still eye looks like to ARKit |
+
+The status card shows the mode name while recording. `scripts/plot_gaze.py` and
+`scripts/detect_okn.py` print the mode and add it to plot titles (`okn` if the
+sidecar has none). Detection logic is the same for every mode.
+
 ## Export
 
 - Tap **Export** on the result card to AirDrop, Save to Files, email, etc.
-  (sends `NS_<date>_<id>.csv` and `.json`), **or**
+  (sends `NS_<date>_<id>_<mode>.csv` and `.json`, mode = `okn`, `fixmove` or
+  `fixstill`; recordings before schema 3 have no mode suffix), **or**
 - open *Files › On My iPhone › NystagmuSense › Recordings/*, **or**
 - in Finder, select the iPhone › Files › NystagmuSense.
 
@@ -152,7 +171,7 @@ and controls (fixation, voluntary saccades, pursuit, head motion and blinks), ve
 direction on device, and assess false positives and sensitivity on recordings not
 used to select thresholds.
 
-## CSV format (schema v2)
+## CSV format (schema v3)
 
 `schemaVersion` in the sidecar tells recordings apart:
 
@@ -161,6 +180,12 @@ used to select thresholds.
 - **v2**: the sidecar adds `stimulusViewport`, `stimulus.fixedBackgroundGray` and
   `stimulus.stripeGray`. The default stimulus is white bars on a constant black
   background, so `stim_bg_gray` is constant (0). CSV columns are unchanged.
+- **v3**: the sidecar adds `stimulus.trialMode` (`okn`, `fixationMovingStripes`,
+  `fixationStillStripes`; missing means `okn`) and, in fixation trials only,
+  `fixationDot` (`centerXPoints`, `centerYPoints`, `diameterPoints`,
+  `outlinePoints`, in SwiftUI points within `stimulusViewport`, origin top-left).
+  A `fields` key describes these. Still-stripe trials record
+  `speedPointsPerSecond` 0. CSV columns are unchanged.
 
 | column | meaning | units |
 |---|---|---|

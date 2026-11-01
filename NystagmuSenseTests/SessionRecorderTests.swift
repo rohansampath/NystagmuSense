@@ -96,11 +96,52 @@ struct SessionRecorderTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let meta = try decoder.decode(SessionMetadata.self, from: Data(contentsOf: files.metadata))
-        #expect(meta.schemaVersion == 2)
+        #expect(meta.schemaVersion == 3)
+        #expect(meta.stimulus.trialMode == .okn)
+        #expect(meta.fixationDot == nil)
+        #expect(files.csv.lastPathComponent.hasSuffix("_okn.csv"))
         #expect(meta.sessionID == r.sessionID)
         #expect(meta.sampleCount == 2)
         #expect(meta.device == device)
         #expect(meta.issues == ["test issue"])
         #expect(Set(meta.columns.keys) == Set(SessionRecorder.csvColumns))
+    }
+
+    // MARK: - Trial modes
+
+    @Test func fileStemIncludesModeSuffix() {
+        let id = UUID(uuidString: "5E5CDC71-55AC-4828-8671-E30A61033B3A")!
+        let expected: [StimulusConfig.TrialMode: String] =
+            [.okn: "_okn", .fixationMovingStripes: "_fixmove", .fixationStillStripes: "_fixstill"]
+        for (mode, suffix) in expected {
+            let stem = SessionRecorder.fileStem(startedAt: .now, sessionID: id, mode: mode)
+            #expect(stem.hasPrefix("NS_"))
+            #expect(stem.hasSuffix("_5E5CDC71" + suffix))
+        }
+    }
+
+    @Test func stillModeExportsZeroDisplacementAndDotMetadata() throws {
+        var r = SessionRecorder(startUptime: 100, duration: 10,
+                                stimulus: StimulusEngine(config: StimulusConfig(mode: .fixationStillStripes)),
+                                viewport: StimulusViewport(widthPoints: 874, heightPoints: 402))
+        for i in 0..<120 { r.record(Fixture.tracked(at: 100 + Double(i) / 60)) }
+
+        let displacement = r.csv().split(separator: "\n").dropFirst()
+            .map { $0.split(separator: ",", omittingEmptySubsequences: false).last! }
+        #expect(displacement.count == 120)
+        #expect(displacement.allSatisfy { $0 == "0.000" })
+
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let files = try r.export(to: dir, device: device)
+        #expect(files.metadata.lastPathComponent.hasSuffix("_fixstill.json"))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let meta = try decoder.decode(SessionMetadata.self, from: Data(contentsOf: files.metadata))
+        #expect(meta.stimulus.trialMode == .fixationStillStripes)
+        #expect(meta.stimulus.speedPointsPerSecond == 0)
+        #expect(meta.fixationDot == FixationDot(stimulus: r.stimulus, viewport: r.viewport!))
+        #expect(meta.fixationDot?.centerXPoints == 437 && meta.fixationDot?.centerYPoints == 201)
+        #expect(meta.fixationDot?.diameterPoints == 12)
     }
 }

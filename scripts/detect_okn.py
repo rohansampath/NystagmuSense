@@ -29,9 +29,11 @@ for research, with no clinical or contrast-sensitivity meaning.
 
 import argparse
 import csv
+import json
 import math
 import sys
 from dataclasses import dataclass, fields
+from pathlib import Path
 
 import numpy as np
 from scipy.signal import savgol_filter
@@ -291,6 +293,19 @@ def merge_windows(windows, beats):
     return out
 
 
+def load_trial_mode(csv_path):
+    """Trial mode from the JSON sidecar next to the CSV; okn if absent (pre-schema-3)."""
+    meta_path = Path(csv_path).with_suffix(".json")
+    if not meta_path.exists():
+        return "okn"
+    try:
+        meta = json.loads(meta_path.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"warning: could not read {meta_path.name}: {e}", file=sys.stderr)
+        return "okn"
+    return ((meta or {}).get("stimulus") or {}).get("trialMode") or "okn"
+
+
 def stimulus_direction(data):
     d = data.get("stim_displacement_pt")
     if d is None or np.sum(np.isfinite(d)) < 2:
@@ -428,10 +443,12 @@ def main(argv=None):
     except SessionError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    mode = load_trial_mode(args.csv)
     print(f"session:           {args.csv}")
+    print(f"mode:              {mode}")
     print_report(r, p)
     if args.plot:
-        plot(r, p, args.plot, args.csv.rsplit("/", 1)[-1])
+        plot(r, p, args.plot, f"{Path(args.csv).name} · mode: {mode}")
         print(f"plot saved:        {args.plot}")
     return 0
 

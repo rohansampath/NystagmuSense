@@ -8,6 +8,7 @@ they are not experimental data.
 
 import contextlib
 import io
+import json
 import math
 import sys
 import tempfile
@@ -233,6 +234,31 @@ class DetectOKNTests(unittest.TestCase):
         self.assertEqual(r["slow"], [])
         self.assertEqual(r["intervals"], [])
 
+
+
+class TrialModeTests(unittest.TestCase):
+    """Sidecar trial mode (schema 3); missing mode or sidecar means okn."""
+
+    def make_session(self, sidecar):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        csv_path = Path(folder.name) / "NS_test.csv"
+        csv_path.write_text(synthetic_csv(lambda t: 0.0))
+        if sidecar is not None:
+            csv_path.with_suffix(".json").write_text(json.dumps(sidecar))
+        return csv_path
+
+    def test_mode_from_sidecar(self):
+        path = self.make_session({"stimulus": {"trialMode": "fixationMovingStripes"}})
+        self.assertEqual(detect_okn.load_trial_mode(path), "fixationMovingStripes")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(detect_okn.main([str(path), "--plot", str(path.with_suffix(".png"))]), 0)
+        self.assertIn("mode:              fixationMovingStripes", out.getvalue())
+
+    def test_missing_mode_or_sidecar_means_okn(self):
+        self.assertEqual(detect_okn.load_trial_mode(self.make_session({"stimulus": {}})), "okn")
+        self.assertEqual(detect_okn.load_trial_mode(self.make_session(None)), "okn")
 
 if __name__ == "__main__":
     unittest.main()

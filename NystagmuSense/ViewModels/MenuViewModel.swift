@@ -10,5 +10,12 @@ import Foundation
 final class MenuViewModel: ObservableObject {
     @Published var showHistory   = false
     @Published var showCountdown = false
+    /// Mode for the next recording; set by the menu button that starts it.
+    @Published var trialMode: StimulusConfig.TrialMode = .okn
+
+    func startRecording(_ mode: StimulusConfig.TrialMode) {
+        trialMode     = mode
+        showCountdown = true
+    }
 }
  

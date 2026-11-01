@@ -108,4 +108,58 @@ struct StimulusEngineTests {
         #expect(cfg.participantInstruction
                 == "Keep your head still and watch the black bars move to the left.")
     }
+
+    // MARK: - Trial modes
+
+    @Test func stillStripeModeNeverMoves() {
+        let still = StimulusEngine(config: StimulusConfig(mode: .fixationStillStripes))
+        #expect(still.config.speedPointsPerSecond == 0)
+        for t in [0, 0.016, 0.5, 5, 10, 1_000.0] {
+            #expect(still.displacement(at: t) == 0)
+            #expect(still.snapshot(at: t).displacementPoints == 0)
+            #expect(still.stripePositions(at: t, viewWidth: 874) == still.stripePositions(at: 0, viewWidth: 874))
+        }
+    }
+
+    @Test func movingFixationModeMatchesOKNMotion() {
+        let okn = StimulusEngine(config: StimulusConfig(mode: .okn))
+        let fix = StimulusEngine(config: StimulusConfig(mode: .fixationMovingStripes))
+        #expect(okn.config == StimulusConfig())          // default OKN trial is unchanged
+        for t in [0, 0.016, 0.5, 3.7, 10.0] {
+            #expect(fix.displacement(at: t) == okn.displacement(at: t))
+            #expect(fix.backgroundGray(at: t) == okn.backgroundGray(at: t))
+            #expect(fix.stripePositions(at: t, viewWidth: 874) == okn.stripePositions(at: t, viewWidth: 874))
+        }
+    }
+
+    @Test func trialModeRoundTripsThroughJSON() throws {
+        for mode in StimulusConfig.TrialMode.allCases {
+            let config = StimulusConfig(mode: mode)
+            let decoded = try JSONDecoder().decode(StimulusConfig.self, from: JSONEncoder().encode(config))
+            #expect(decoded == config)
+            #expect(decoded.trialMode == mode)
+        }
+    }
+
+    @Test func sidecarWithoutModeDecodesAsOKN() throws {
+        // A schema-2 sidecar's stimulus block, written before trialMode existed.
+        let json = """
+        {"stripeWidthRatio":0.02,"pitchToWidthRatio":2.4,"speedPointsPerSecond":90,"direction":"rightward",
+         "fadeHalfCycleSeconds":30,"fixedBackgroundGray":0,"stripeGray":1}
+        """
+        let config = try JSONDecoder().decode(StimulusConfig.self, from: Data(json.utf8))
+        #expect(config.trialMode == .okn)
+        // Recorded settings are kept as written (independent of current defaults).
+        #expect(config.speedPointsPerSecond == 90 && config.fixedBackgroundGray == 0 && config.stripeGray == 1)
+    }
+
+    @Test func fixationDotIsCentredAndOnlyInControlModes() throws {
+        let size = CGSize(width: 874, height: 402)
+        #expect(StimulusEngine(config: StimulusConfig(mode: .okn)).fixationDotRect(in: size) == nil)
+        for mode in [StimulusConfig.TrialMode.fixationMovingStripes, .fixationStillStripes] {
+            let dot = try #require(StimulusEngine(config: StimulusConfig(mode: mode)).fixationDotRect(in: size))
+            #expect(dot.midX == 437 && dot.midY == 201)
+            #expect(dot.width == 12 && dot.height == 12)
+        }
+    }
 }

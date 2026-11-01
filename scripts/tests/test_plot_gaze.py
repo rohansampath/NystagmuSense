@@ -6,6 +6,9 @@ All CSVs here are SYNTHETIC fixtures for parser testing only; they are not
 experimental recordings.
 """
 
+import contextlib
+import io
+import json
 import math
 import sys
 import tempfile
@@ -82,6 +85,36 @@ class PlotGazeTests(unittest.TestCase):
     def test_main_returns_error_for_missing_file(self):
         self.assertEqual(plot_gaze.main(["/nonexistent/session.csv"]), 1)
 
+
+
+class TrialModeTests(unittest.TestCase):
+    """Sidecar trial mode (schema 3); missing mode or sidecar means okn."""
+
+    def run_main(self, sidecar):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        csv_path = Path(folder.name) / "NS_test.csv"
+        rows = [TRACKED.format(t=i / 60, h=100 + i / 60) for i in range(5)]
+        csv_path.write_text("\n".join([HEADER, *rows]) + "\n")
+        if sidecar is not None:
+            csv_path.with_suffix(".json").write_text(json.dumps(sidecar))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            plot_gaze.main([str(csv_path), "--output", str(Path(folder.name) / "plot.png")])
+        return out.getvalue()
+
+    def test_mode_from_sidecar_is_printed(self):
+        out = self.run_main({"schemaVersion": 3, "stimulus": {"trialMode": "fixationStillStripes"}})
+        self.assertIn("mode:          fixationStillStripes", out)
+
+    def test_missing_mode_or_sidecar_means_okn(self):
+        self.assertIn("mode:          okn", self.run_main({"schemaVersion": 2, "stimulus": {}}))
+        self.assertIn("mode:          okn", self.run_main(None))
+
+    def test_plot_title_includes_mode(self):
+        meta = {"stimulus": {"trialMode": "fixationMovingStripes"}}
+        self.assertEqual(plot_gaze.plot_title("a.csv", meta), "a.csv · mode: fixationMovingStripes")
+        self.assertEqual(plot_gaze.plot_title("a.csv", None), "a.csv · mode: okn")
 
 if __name__ == "__main__":
     unittest.main()

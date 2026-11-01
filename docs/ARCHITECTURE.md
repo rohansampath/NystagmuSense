@@ -132,6 +132,22 @@ in each sidecar's `columns` key and in the README.
 > eye's *position* in the face and barely changes with gaze. Velocities and
 > OKN decisions derived from it weren't meaningful.
 
+## Trial modes (fixation controls)
+
+`StimulusConfig.trialMode` (`okn` default, `fixationMovingStripes`,
+`fixationStillStripes`) is the only switch. The menu sets `MenuViewModel.trialMode`,
+and `TestView(mode:)` builds its `TestViewModel` with `StimulusConfig(mode:)`. Everything
+after that (landscape gate, first-tracked-frame start, recording, export) is shared.
+
+- `StimulusEngine.displacement(at:)` returns 0 in still mode (its config also records
+  speed 0), so rendering and `stim_displacement_pt` agree.
+- `StimulusEngine.fixationDotRect(in:)` is the one source of the dot's geometry: centred,
+  12 pt, nil for `okn`. `FadingStripeView` draws it last, so it's on top of the stripes.
+  `FixationDot` in the sidecar is computed from the same function and the recorded
+  `stimulusViewport`.
+- The mode appears in the sidecar (`stimulus.trialMode`, schema 3), the file stem
+  (`_okn`, `_fixmove`, `_fixstill`) and the status card. Older sidecars decode as `okn`.
+
 ## Future OKN detection (integration point)
 
 Input: `[RecordedSample]` (from `SessionRecorder.samples`) or the exported CSV.
