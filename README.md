@@ -34,7 +34,7 @@ function.
 | 10 s raw ARKit eye-tracking recording | Implemented, **not yet verified on a physical iPhone** |
 | CSV + JSON export (share sheet / Files app) | Implemented, **not yet verified on device** |
 | Python plotting (`scripts/plot_gaze.py`) | Works on CSVs from the real exporter (tested with synthetic data) |
-| OKN detection | **Not implemented.** Legacy heuristic kept in `Services/Analysis/`, disabled |
+| OKN detection | **Candidate only, offline:** `scripts/detect_okn.py` (Savitzky–Golay baseline, tuned on synthetic data). Not in the app; legacy Swift heuristic in `Services/Analysis/` stays disabled |
 | Contrast-sensitivity score | **Removed from the test flow.** "Past Tests" shows only legacy prototype scores |
 
 Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -99,6 +99,24 @@ OKN. Interpret it by eye. It refuses empty, malformed, or time-decreasing files
 rather than reordering or interpolating, and exits with an error (no PNG) if no sample
 has a tracked face.
 
+## Candidate OKN detection (offline)
+
+```bash
+python3 scripts/detect_okn.py path/to/NS_....csv [--plot okn.png]
+```
+
+A baseline, interpretable detector (no ML). It converts each eye's direction vector to a
+horizontal angle, masks untracked samples and blinks (padded 50 ms), differentiates with a
+Savitzky–Golay filter (5 samples, polyorder 2) within each valid run only, then finds fast
+phases (|v| > 40 deg/s), slow phases (line fits ≥ 0.15 s) and OKN beats (a slow phase followed
+within 0.1 s by an opposite-direction fast phase). OKN is a candidate where a 2 s window
+(0.5 s step) has ≥ 2 beats with ≥ 75 % in one direction. Every threshold is a CLI flag; run
+with `--help`.
+
+Caveats: thresholds were tuned on synthetic data only, the eye-angle sign (+ = subject's
+right) is **unverified on device**, and output is a research candidate with no clinical or
+contrast-sensitivity meaning.
+
 ## CSV format (schema v1)
 
 | column | meaning | units |
@@ -123,7 +141,8 @@ observed rate, stimulus settings, column definitions, and any capture issues.
 xcodebuild test -project NystagmuSense.xcodeproj -scheme NystagmuSense \
   -destination 'platform=iOS Simulator,name=iPhone 16'
 
-# Python script tests (stdlib only)
+# Python script tests (plot_gaze tests are stdlib only; detect_okn tests need numpy + scipy)
+pip install -r scripts/requirements.txt
 python3 -m unittest discover scripts/tests
 ```
 
