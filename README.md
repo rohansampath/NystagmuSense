@@ -124,6 +124,43 @@ The status card shows the mode name while recording. `scripts/plot_gaze.py` and
 `scripts/detect_okn.py` print the mode and add it to plot titles (`okn` if the
 sidecar has none). Detection logic is the same for every mode.
 
+## Annotation workflow (reset labels for detector development)
+
+`scripts/annotate_okn.py` is a small matplotlib tool for marking reset (fast-phase)
+events by hand. `scripts/evaluate_okn.py` scores `detect_okn.py` against
+completely reviewed trials. There is no ML, no database and no new dependency.
+Labels describe what is visible in the ARKit signal, not physiological ground truth.
+
+```bash
+# Independent labels (suggestions hidden): use for trials kept for evaluation
+python3 scripts/annotate_okn.py trials/<name>/<name>.csv --annotator AA
+# Development labels: velocity-peak suggestions (≥ 20 deg/s, NOT a validated threshold)
+python3 scripts/annotate_okn.py trials/<name>/<name>.csv --annotator AA --assisted
+```
+
+| Control | Action |
+|---|---|
+| left-click / right-click | add an event at the nearest sample / remove the nearest event |
+| `1` `2` `3` | label for the next clicks: `fast_phase` / `uncertain` / `artifact` |
+| `z` | undo |
+| `t`, `y` | show/hide suggestions, accept the ones in view (assisted only) |
+| `x` | mark the trial **completely reviewed** (needed for scoring, including trials with 0 resets) |
+| `s` | save to `analysis/annotations/events.csv` and `reviews.csv` |
+
+Zoom and pan use the toolbar. Opening the same recording again loads its saved
+labels for editing. Events within 50 ms of an existing event are refused as
+duplicates. Then:
+
+```bash
+python3 scripts/evaluate_okn.py                     # ±100 ms one-to-one matching
+python3 scripts/evaluate_okn.py --tolerance-ms 150 --annotator AA
+```
+
+The scoring rules (uncertain labels excluded, artifacts count as false
+positives, independent and assisted labels reported separately, unreviewed
+trials never scored) are in `scripts/evaluate_okn.py`. The Pilot 01 labelling
+plan is in [analysis/annotations/README.md](analysis/annotations/README.md).
+
 ## Export
 
 - Tap **Export** on the result card to AirDrop, Save to Files, email, etc.
