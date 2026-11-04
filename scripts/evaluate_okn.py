@@ -17,8 +17,8 @@ Event-level scoring rules (documented so results are reproducible):
   fast_phase labels, any remaining prediction within tolerance of an uncertain
   label is dropped (neither TP nor FP), and uncertain labels are never FN.
 - "artifact" labels are not references; predictions on them stay false positives.
-- precision = TP/(TP+FP), recall = TP/(TP+FN), F1 = harmonic mean; each is
-  "n/a" when its denominator is 0 (e.g. recall in a trial with no resets).
+- precision = TP/(TP+FP), recall = TP/(TP+FN), F1 = 2TP/(2TP+FP+FN);
+  each is "n/a" when its denominator is 0 (e.g. recall with no resets).
 - Results are split by annotation_method. "manual" (independent, suggestions
   hidden) is the primary evaluation; "assisted" labels were made with
   velocity-peak suggestions visible and are reported separately.
@@ -65,7 +65,7 @@ def score_trial(events, predictions, tolerance=DEFAULT_TOLERANCE_S):
     refs = [t for t, label in events if label == "fast_phase"]
     uncertain = [t for t, label in events if label == "uncertain"]
     pairs, missed, extra = match_events(refs, predictions, tolerance)
-    _, _, still_extra = match_events(uncertain, extra, tolerance)
+    still_extra = [p for p in extra if not any(abs(p - u) <= tolerance for u in uncertain)]
     return dict(tp=len(pairs), fn=len(missed), fp=len(still_extra),
                 excluded_uncertain=len(extra) - len(still_extra),
                 mean_abs_offset_s=(sum(abs(p - r) for r, p in pairs) / len(pairs)) if pairs else None)
@@ -74,8 +74,8 @@ def score_trial(events, predictions, tolerance=DEFAULT_TOLERANCE_S):
 def prf(tp, fp, fn):
     precision = tp / (tp + fp) if tp + fp else None
     recall = tp / (tp + fn) if tp + fn else None
-    f1 = (2 * precision * recall / (precision + recall)
-          if precision is not None and recall is not None and precision + recall > 0 else None)
+    denominator = 2 * tp + fp + fn
+    f1 = 2 * tp / denominator if denominator else None
     return precision, recall, f1
 
 

@@ -142,6 +142,17 @@ class AnnotatorGUITests(TempLabels):
         a.on_click(FakeEvent(a.ax_a, 3.0))
         self.assertEqual(a.events, [])
 
+    def test_hiding_suggestions_before_save_keeps_assisted_method(self):
+        path = self.recording("R1")
+        a = self.open(path, assisted=True)
+        a.on_key(FakeEvent(key="t"))
+        self.assertTrue(a.dirty)
+        a.on_key(FakeEvent(key="t"))
+        self.assertFalse(a.suggestions_shown)
+        self.assertEqual(a.method, "assisted")
+        a.save()
+        self.assertEqual(self.open(path).method, "assisted")
+
 
 class MatchingTests(unittest.TestCase):
     def test_one_to_one_within_tolerance(self):
@@ -165,8 +176,13 @@ class MatchingTests(unittest.TestCase):
     def test_precision_recall_f1_and_undefined_cases(self):
         self.assertEqual(evaluate_okn.prf(3, 1, 1), (0.75, 0.75, 0.75))
         self.assertEqual(evaluate_okn.prf(0, 0, 0), (None, None, None))
-        self.assertEqual(evaluate_okn.prf(0, 2, 0), (0.0, None, None))   # fixation trial with false hits
-        self.assertEqual(evaluate_okn.prf(0, 0, 4), (None, 0.0, None))
+        self.assertEqual(evaluate_okn.prf(0, 2, 0), (0.0, None, 0.0))   # fixation trial with false hits
+        self.assertEqual(evaluate_okn.prf(0, 0, 4), (None, 0.0, 0.0))
+        self.assertEqual(evaluate_okn.prf(0, 2, 4), (0.0, 0.0, 0.0))
+
+    def test_all_predictions_near_uncertain_label_are_excluded(self):
+        s = evaluate_okn.score_trial([(2.0, "uncertain")], [1.95, 2.0, 2.05, 3.0], 0.1)
+        self.assertEqual((s["fp"], s["excluded_uncertain"]), (1, 3))
 
     def test_uncertain_excluded_and_artifact_counts_as_false_positive(self):
         events = [(1.0, "fast_phase"), (2.0, "uncertain"), (3.0, "artifact")]

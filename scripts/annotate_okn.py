@@ -218,6 +218,7 @@ class Annotator:
             print("note: this trial already has assisted labels from this annotator; "
                   "it stays 'assisted' even if suggestions are hidden now.")
         self.suggestions_shown = False
+        self.suggestions_ever_shown = False
         self.suggestions = (propose_candidates(self.sig["t"], self.sig["velocity"], self.sig["valid"])
                             if assisted else [])
         self.label = "fast_phase"
@@ -227,7 +228,7 @@ class Annotator:
 
     @property
     def method(self):
-        used = self.suggestions_shown or self.previous_method == "assisted"
+        used = self.suggestions_ever_shown or self.previous_method == "assisted"
         return "assisted" if used else "manual"
 
     # ------------------------------------------------------------ drawing
@@ -356,6 +357,9 @@ class Annotator:
                 print("suggestions are disabled in independent mode (start with --assisted)")
                 return
             self.suggestions_shown = not self.suggestions_shown
+            if self.suggestions_shown:
+                self.suggestions_ever_shown = True
+                self.dirty = True
             self.redraw()
         elif key == "y":
             self.accept_visible_suggestions()
