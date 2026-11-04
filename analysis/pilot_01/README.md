@@ -23,6 +23,9 @@ backed up privately with SHA-256 checksums.
 
 To reproduce, with the 21 raw recording folders in `trials/`:
 
+The committed manifest defines the frozen cohort. Extra recordings are ignored;
+missing CSV or JSON files stop the run before any published output is changed.
+
 ```bash
 python3 -m pip install -r scripts/requirements.txt
 python3 analysis/pilot_01/run_pilot.py

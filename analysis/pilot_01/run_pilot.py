@@ -29,7 +29,6 @@ import matplotlib  # noqa: E402
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-SESSION_GLOB = "NS_20261104-*"
 BATCH1_N = 5
 BATCH1_TASKS = ["centre 10 s", "left 5 s → right 5 s", "right 5 s → left 5 s",
                 "alternate L/R every ~2 s", "centre + deliberate blinks"]
@@ -47,8 +46,20 @@ SIGN_NOTE = "detector angle (deg)\n[documented + = right; see report]"
 # ---------------------------------------------------------------- manifest
 
 def build_manifest():
+    # This is a frozen cohort, not every recording made on the same date.
+    # Validate all private inputs before main() can replace published outputs.
+    with open(OUT / "manifest.csv", newline="") as f:
+        stems = [r["filename"] for r in csv.DictReader(f)]
+    if len(stems) != 21 or len(set(stems)) != 21:
+        raise ValueError("Pilot 01 manifest must contain exactly 21 unique recordings")
+    missing = [str(ROOT / "trials" / stem / f"{stem}.{ext}")
+               for stem in stems for ext in ("csv", "json")
+               if not (ROOT / "trials" / stem / f"{stem}.{ext}").is_file()]
+    if missing:
+        raise FileNotFoundError("Pilot 01 needs all 21 private recordings; no outputs changed. "
+                                f"Missing {len(missing)} files, including {missing[0]}")
     rows = []
-    for d in sorted((ROOT / "trials").glob(SESSION_GLOB)):
+    for d in (ROOT / "trials" / stem for stem in stems):
         stem = d.name
         meta = json.loads((d / f"{stem}.json").read_text())
         with open(d / f"{stem}.csv", newline="") as f:
@@ -421,11 +432,11 @@ def write_csv(path, header, rows):
 
 
 def main():
+    rows = build_manifest()
     figs, per_trial, det_out = OUT / "figures", OUT / "figures" / "trials", OUT / "detector_output"
     for d in (figs, per_trial, det_out):
         d.mkdir(parents=True, exist_ok=True)
 
-    rows = build_manifest()
     write_csv(OUT / "manifest.csv",
               ["trial", "label", "batch", "expected", "recorded_mode", "condition", "matches_expected",
                "filename", "startedAt_utc", "seconds_since_previous"],
@@ -493,4 +504,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (FileNotFoundError, ValueError) as e:
+        sys.exit(str(e))
