@@ -37,8 +37,12 @@ DEFAULT_PORT = 8765
 DEFAULT_TRIALS_DIR = Path(__file__).resolve().parents[1] / "trials"
 # A 10 s recording is ~100 KB; this leaves plenty of room for longer sessions.
 MAX_BODY_BYTES = 10 * 1024 * 1024
-# SessionRecorder.fileStem: NS_<yyyyMMdd-HHmmss>_<8 hex>[_<mode>]
-STEM_RE = re.compile(r"NS_\d{8}-\d{6}_[0-9A-Fa-f]{8}(?:_[a-z]+)?")
+# RecordingName (schema 4+): {experiment}_T{###}_{MODE}_{DIRECTION}_{UTC yyyyMMdd_HHmmss},
+# e.g. P02_T001_OKN_RIGHT_20261104_143022; or the legacy SessionRecorder.fileStem
+# NS_<yyyyMMdd-HHmmss>_<8 hex>[_<mode>].
+STEM_RE = re.compile(
+    r"[A-Z0-9-]{1,16}_T\d{3,}_(?:OKN|FIXMOVE|FIXSTILL)_(?:RIGHT|LEFT|NONE)_\d{8}_\d{6}"
+    r"|NS_\d{8}-\d{6}_[0-9A-Fa-f]{8}(?:_[a-z]+)?")
 
 
 class UploadError(Exception):

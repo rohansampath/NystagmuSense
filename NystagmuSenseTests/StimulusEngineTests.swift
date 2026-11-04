@@ -157,6 +157,24 @@ struct StimulusEngineTests {
         }
     }
 
+    @Test(arguments: [StimulusConfig.Direction.rightward, .leftward])
+    func directionReversesMotionForMovingModesOnly(_ direction: StimulusConfig.Direction) throws {
+        let sign: Double = direction == .rightward ? 1 : -1
+        for mode in [StimulusConfig.TrialMode.okn, .fixationMovingStripes] {
+            let config = StimulusConfig(mode: mode, direction: direction)
+            #expect(config.isMoving)
+            #expect(StimulusEngine(config: config).displacement(at: 2) == sign * 252)   // same speed magnitude
+        }
+        let still = StimulusConfig(mode: .fixationStillStripes, direction: direction)
+        #expect(!still.isMoving)
+        #expect(StimulusEngine(config: still).displacement(at: 2) == 0)
+        let decoded = try JSONDecoder().decode(StimulusConfig.self,
+                                               from: JSONEncoder().encode(StimulusConfig(mode: .okn, direction: direction)))
+        #expect(decoded.direction == direction)
+        #expect(StimulusConfig(mode: .okn, direction: direction).participantInstruction
+                    .hasSuffix(direction == .rightward ? "move to the right." : "move to the left."))
+    }
+
     @Test func trialModeRoundTripsThroughJSON() throws {
         for mode in StimulusConfig.TrialMode.allCases {
             let config = StimulusConfig(mode: mode)

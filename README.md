@@ -70,13 +70,96 @@ In-app OKN detection and contrast-sensitivity measurement remain future work.
 3. Connect the iPhone, select it as the run destination, and press ⌘R.
 4. Accept the camera permission prompt on first use.
 
+## Experiment workflow
+
+1. On the Mac, start the receiver (see [Automatic Wi-Fi Recording Transfer](#automatic-wi-fi-recording-transfer)).
+2. On the menu, enter the **Experiment** ID once (for example `P02`). It is kept
+   across app restarts. The line below the field shows the next name, e.g.
+   `P02_T004`.
+3. Pick the **stripe direction**: `← Left` or `Right →`. Right is the default
+   and the original stimulus. Direction applies to *OKN* and *Dot + Moving
+   Stripes*. Still stripes are named `NONE`.
+4. Tap a trial button, rotate to landscape, and tap **Check Position**. The
+   card shows face detection and an approximate distance:
+   - "No face detected", "Move closer (45 cm)" or "Move farther away (25 cm)";
+   - "Good positioning — 35 cm" once the distance is in range;
+   - **Start Trial** enables once the smoothed distance has stayed inside
+     **30–40 cm** for 1 s ("Ready to record").
+5. Tap **Start Trial**. The recording begins on the next tracked frame, using
+   the same ARKit session. Moving out of range during the trial does **not**
+   stop it; the deviation is saved in the sidecar.
+6. Check that the result card shows the file name and **Uploaded to Mac**.
+
+**Start without distance check (development)** skips the gate, for example when
+the distance readout isn't working. The trial is recorded as
+`faceDistance.check = "bypassed"`, never as passed.
+
+**The distance is approximate.** It is ARKit's estimate of the distance from the
+front camera to the midpoint between the eyes, and it is uncalibrated. The camera
+sits at the screen edge, so this isn't the eye-to-screen-centre distance (about
+2 % less at 35 cm). The 30–40 cm range is a preliminary choice for experiments,
+not a validated requirement.
+
+### File names
+
+Every recording is named
+`{experiment}_T{trial}_{MODE}_{DIRECTION}_{yyyyMMdd_HHmmss}`, and the folder,
+CSV and JSON all share that name. For example:
+
+```
+P02_T001_OKN_RIGHT_20261104_143022.csv / .json
+P02_T002_FIXMOVE_LEFT_20261104_143105.csv / .json
+P02_T003_FIXSTILL_NONE_20261104_143145.csv / .json
+```
+
+- **Timestamp:** the recording start in **UTC**, the same instant as
+  `startedAt` in the JSON.
+- **Experiment ID:** letters, digits and `-` only, in upper case; blank becomes
+  `EXP`.
+- **Trial counter:** one per experiment, stored on the phone. It survives app
+  restarts but not deleting the app. A number is taken when a recording
+  *finishes*, so it is never reused, even if export or upload then fails. Retry
+  Export keeps the same name. Cancelled or empty recordings don't use a number.
+- **Older recordings** keep their `NS_<date>_<id>_<mode>` names, and every
+  script still reads them.
+
+The schema 4 sidecar adds:
+- `experimentID`, `trialNumber`, `recordingName`;
+- `faceDistance`: `check`, `atStartCm`, `medianCm`, `minCm`, `maxCm`,
+  `fractionOutsideRange`, and the definition above.
+
+`sessionID` stays the unique recording ID, and the CSV columns are unchanged.
+
+### Checks to do on a physical iPhone
+
+Neither distance nor direction can be tested in the Simulator.
+1. **Distance:**
+   - Hold a ruler from the eyes (bridge of the nose) to the front camera at
+     about **25, 35 and 45 cm**.
+   - Note the cm shown at each distance, and whether "Move farther away",
+     "Good positioning / Ready" and "Move closer" appear as expected.
+   - Expect a few cm of error. Treat the readout as **uncalibrated** until it
+     has been checked like this.
+2. **Direction:**
+   - Run an OKN trial with `← Left` and check that the bars move toward the
+     screen's left edge.
+   - The JSON should have `"direction": "leftward"`, the name should contain
+     `_OKN_LEFT_`, and `stim_displacement_pt` in the CSV should decrease.
+   - Repeat with `Right →`.
+   - With *Dot + Still Stripes*, the bars never move and the name says `NONE`.
+3. **Names:**
+   - Record two trials and check that the names go `T001`, `T002`.
+   - Quit and relaunch the app (swipe it away), record again, and check that
+     the next name is `T003`.
+
 ## Record 10 seconds
 
 1. Tap **Record 10 Seconds**, then rotate the phone into landscape. If the screen
-   won't rotate, turn off Portrait Orientation Lock. **Start Recording** stays
+   won't rotate, turn off Portrait Orientation Lock. **Check Position** stays
    disabled until the app is displayed in landscape.
-2. Keep your face fully visible to the front camera in good light, then tap
-   **Start Recording**. The first time, iOS asks for camera access; this doesn't
+2. Keep your face fully visible to the front camera in good light, tap
+   **Check Position**, then **Start Trial** once the distance is in range (see
+   [Experiment workflow](#experiment-workflow)). The first time, iOS asks for camera access; this doesn't
    fail the session. From Start until the session ends, the screen is locked to the
    landscape side you're holding, so it can't rotate mid-trial. The static
    stimulus frame is already showing, and once a face is tracked the stimulus starts
@@ -127,8 +210,9 @@ sidecar has none). Detection logic is the same for every mode.
 ## Export
 
 - Tap **Export** on the result card to AirDrop, Save to Files, email, etc.
-  (sends `NS_<date>_<id>_<mode>.csv` and `.json`, mode = `okn`, `fixmove` or
-  `fixstill`; recordings before schema 3 have no mode suffix), **or**
+  (sends `{experiment}_T{trial}_{MODE}_{DIRECTION}_{UTC}.csv` and `.json`; see
+  [File names](#file-names). Recordings before schema 4 are named
+  `NS_<date>_<id>[_<mode>]`), **or**
 - open *Files › On My iPhone › NystagmuSense › Recordings/*, **or**
 - in Finder, select the iPhone › Files › NystagmuSense.
 
@@ -136,7 +220,7 @@ sidecar has none). Detection logic is the same for every mode.
 
 With a small receiver running on your Mac, each recording is uploaded
 automatically after it is saved on the phone, into
-`trials/NS_<date>_<id>_<mode>/` (the same CSV + JSON, byte-for-byte). The phone
+`trials/<recording name>/` (the same CSV + JSON, byte-for-byte). The phone
 always keeps its own copy. No paid Apple Developer account, cloud service or
 extra dependencies; the receiver is Python standard library only.
 
@@ -177,17 +261,17 @@ extra dependencies; the receiver is Python standard library only.
 
 5. **Record and verify.** Record a trial as usual. The result card shows
    *Saved locally · Uploading to Mac…*, then **Uploaded to Mac** once the Mac has
-   written both files. The server prints `saved trials/NS_…`. Then:
+   written both files. The server prints `saved trials/P02_T001_…`. Then:
 
    ```bash
    ls trials/
-   python3 scripts/plot_gaze.py trials/NS_<…>/NS_<…>.csv
+   python3 scripts/plot_gaze.py trials/P02_T001_<…>/P02_T001_<…>.csv
    ```
 
    If no server is set up, the card says *Saved locally (Mac transfer not set up)*.
 
-   Received folders (`trials/NS_*/`) are git-ignored because this repository is
-   public; rename and add a trial on purpose if it should be shared.
+   New folders in `trials/` are git-ignored because this repository is public;
+   share a trial on purpose with `git add -f trials/<name>`.
 
 6. **Retry a failed upload.** If the card says **Upload failed: saved locally**,
    fix the cause it shows (server not running, wrong IP or token, different Wi-Fi)

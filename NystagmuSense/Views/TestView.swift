@@ -12,9 +12,9 @@ struct TestView: View {
     @EnvironmentObject private var menu: MenuViewModel
     @Environment(\.scenePhase) private var scenePhase
 
-    init(mode: StimulusConfig.TrialMode = .okn) {
+    init(mode: StimulusConfig.TrialMode = .okn, direction: StimulusConfig.Direction = .rightward) {
         _vm = StateObject(wrappedValue:
-            TestViewModel(stimulus: StimulusEngine(config: StimulusConfig(mode: mode))))
+            TestViewModel(stimulus: StimulusEngine(config: StimulusConfig(mode: mode, direction: direction))))
     }
 
     var body: some View {
@@ -33,7 +33,10 @@ struct TestView: View {
                                     canRetryExport: vm.canRetryExport,
                                     canTryAgain: vm.canTryAgain,
                                     upload: vm.upload,
-                                    onStart: vm.start,
+                                    positioning: vm.positioning,
+                                    onCheckPosition: vm.startPositioning,
+                                    onStart: { vm.start() },
+                                    onStartWithoutCheck: { vm.start(bypassDistanceCheck: true) },
                                     onRetryExport: vm.retryExport,
                                     onRetryUpload: vm.retryUpload,
                                     onTryAgain: vm.tryAgain,
@@ -58,7 +61,7 @@ struct TestView: View {
         .onChange(of: vm.phase) { _, phase in
             // Pin the landscape side for the whole capture; free it afterwards.
             switch phase {
-            case .starting, .recording: OrientationLock.holdCurrentLandscape()
+            case .positioning, .starting, .recording: OrientationLock.holdCurrentLandscape()
             default:                    OrientationLock.release()
             }
         }
@@ -70,7 +73,7 @@ struct TestView: View {
     /// while recording; a plain background once the session has ended.
     @ViewBuilder private var stimulus: some View {
         switch vm.phase {
-        case .idle, .starting:
+        case .idle, .positioning, .starting:
             FadingStripeView(engine: vm.stimulus, startTime: nil)
         case .recording:
             FadingStripeView(engine: vm.stimulus, startTime: vm.stimulusStartTime)

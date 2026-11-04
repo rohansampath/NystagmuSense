@@ -13,6 +13,8 @@ final class MenuViewModel: ObservableObject {
     @Published var showTransfer  = false
     /// Mode for the next recording; set by the menu button that starts it.
     @Published var trialMode: StimulusConfig.TrialMode = .okn
+    /// Stripe direction for moving-stripe trials; Right keeps the original stimulus.
+    @Published var direction: StimulusConfig.Direction = .rightward
 
     func startRecording(_ mode: StimulusConfig.TrialMode) {
         trialMode     = mode

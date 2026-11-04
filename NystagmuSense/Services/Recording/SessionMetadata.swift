@@ -58,7 +58,9 @@ struct SessionMetadata: Codable, Equatable {
     ///    a fixed background; the current default uses a ten-second fade.
     /// 3: adds stimulus.trialMode and fixationDot (control trials); the mode is
     ///    also the file-name suffix (_okn / _fixmove / _fixstill).
-    var schemaVersion = 3
+    /// 4: adds experimentID, trialNumber, recordingName (descriptive file stem
+    ///    `{experiment}_{T###}_{MODE}_{DIR}_{UTC}`) and faceDistance.
+    var schemaVersion = 4
     let sessionID: UUID
     let startedAt: Date
     let device: DeviceInfo
@@ -74,6 +76,11 @@ struct SessionMetadata: Codable, Equatable {
     var stimulusViewport: StimulusViewport? = nil
     /// Present only in fixation-control trials.
     var fixationDot: FixationDot? = nil
+    /// Schema 4+; nil in older sidecars.
+    var experimentID: String? = nil
+    var trialNumber: Int? = nil
+    var recordingName: String? = nil
+    var faceDistance: FaceDistanceSummary? = nil
     var gazeSource = "ARKit ARFaceTrackingConfiguration (TrueDepth)"
     var columns = SessionMetadata.columnDescriptions
     /// Optional so sidecars written before schema 3 still decode.
@@ -111,6 +118,17 @@ struct SessionMetadata: Codable, Equatable {
             + "fixationStillStripes (same stripes, speed 0, + dot); missing in older sidecars means okn",
         "fixationDot": "fixation-control trials only: dot centre and diameter in SwiftUI points within "
             + "stimulusViewport (origin top-left), solid red with a dark outline of outlinePoints; never moves",
+        "stimulus.direction": "on-screen stripe motion (rightward = toward the screen's right edge, "
+            + "stim_displacement_pt increasing); not meaningful when speed is 0 (fixationStillStripes)",
+        "sessionID": "unique recording ID (UUID)",
+        "startedAt": "recording start, ISO 8601 UTC; also the timestamp in recordingName",
+        "experimentID": "experiment identifier entered on the menu (schema 4+)",
+        "trialNumber": "per-experiment trial counter, never reused on this phone (schema 4+)",
+        "recordingName": "stem shared by the folder, CSV and JSON: "
+            + "{experimentID}_T{trial:03}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}; "
+            + "legacy NS_ stem when no experiment name was assigned",
+        "faceDistance": "approximate front-camera-to-eye-midpoint distance from ARKit, cm, uncalibrated; "
+            + "check = passed / bypassed / notPerformed for the pre-trial positioning gate",
     ]
 
     static let encoder: JSONEncoder = {

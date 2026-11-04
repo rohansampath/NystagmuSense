@@ -5,5 +5,6 @@ __pycache__/
 xcuserdata/
 
 # Recordings received from the phone (scripts/receive_recordings.py) stay local:
-# this repository is public. Rename and add a trial deliberately if it should be shared.
-trials/NS_*/
+# this repository is public. Already-tracked trials stay tracked; share a new
+# trial deliberately with `git add -f trials/<name>`.
+trials/*/

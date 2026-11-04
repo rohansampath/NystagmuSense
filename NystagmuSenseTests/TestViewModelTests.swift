@@ -13,12 +13,15 @@ import Testing
 struct TestViewModelTests {
     let provider = MockGazeProvider()
     let outputDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    /// Isolated trial counter per test (never the app's real UserDefaults).
+    let experiment = ExperimentLog(defaults: UserDefaults(suiteName: "vm-" + UUID().uuidString)!)
 
     /// Long duration so the auto-finish timer never fires during a test.
     func makeVM(now: Double = 100, startupTimeout: Double = 1000,
                 uploader: RecordingUploading? = nil) -> TestViewModel {
         let vm = TestViewModel(provider: provider, duration: 1000, startupTimeout: startupTimeout,
-                      outputDirectory: outputDir, uploader: { uploader }, now: { now })
+                      outputDirectory: outputDir, uploader: { uploader }, experiment: experiment,
+                      now: { now })
         vm.updateViewport(width: 844, height: 390)
         return vm
     }
@@ -383,7 +386,152 @@ struct TestViewModelTests {
         #expect(vm.upload == .uploaded)
         #expect(uploader.uploaded.count == 1)
     }
+
+    // MARK: - Positioning (face distance)
+
+    /// Positioning in landscape with a tracked face at `cm` for `seconds` at 60 Hz.
+    func position(_ vm: TestViewModel, cm: Float?, seconds: Double, from t0: Double = 100) -> Double {
+        var t = t0
+        for _ in 0..<Int(seconds * 60) {
+            provider.emit(cm.map { Fixture.tracked(at: t, distance: $0 / 100) } ?? .untracked(at: t))
+            t += 1.0 / 60
+        }
+        return t
+    }
+
+    func exportedMetadata() throws -> SessionMetadata {
+        let folder = try #require(exportedSessions().first)
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return try d.decode(SessionMetadata.self,
+                            from: Data(contentsOf: folder.appendingPathComponent(folder.lastPathComponent + ".json")))
+    }
+
+    @Test func positioningShowsDistanceAndGatesStart() {
+        let vm = makeVM()
+        vm.startPositioning()
+        #expect(vm.phase == .positioning)
+        #expect(provider.startCount == 1)
+        #expect(vm.positioning == .noFace)
+        _ = position(vm, cm: 25, seconds: 0.5)
+        #expect(vm.positioning == .tooClose(25))
+        vm.start()
+        #expect(vm.phase == .positioning)          // not ready → Start does nothing
+        #expect(vm.stimulusStartTime == nil)
+    }
+
+    @Test func readyPositioningArmsRecordingWithTheSameCamera() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = makeVM(now: 200)
+        vm.startPositioning()
+        _ = position(vm, cm: 35, seconds: 1.2)
+        #expect(vm.positioning == .ready(35))
+        vm.start()
+        #expect(vm.phase == .starting)
+        provider.emit(Fixture.tracked(at: 200, distance: 0.35))
+        #expect(vm.phase == .recording)
+        provider.emit(Fixture.tracked(at: 200.5, distance: 0.42))   // drifts out: recorded, not stopped
+        #expect(vm.phase == .recording)
+        vm.finish()
+        #expect(provider.startCount == 1)          // no second session
+        let meta = try exportedMetadata()
+        #expect(meta.faceDistance?.check == .passed)
+        #expect(meta.faceDistance?.atStartCm.map { ($0 * 10).rounded() / 10 } == 35)
+        #expect(meta.faceDistance?.fractionOutsideRange == 0.5)
+    }
+
+    @Test func bypassIsRecordedAsBypassed() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = makeVM(now: 100)
+        vm.startPositioning()
+        provider.emit(.untracked(at: 100))
+        vm.start(bypassDistanceCheck: true)
+        #expect(vm.phase == .starting)
+        provider.emit(Fixture.tracked(at: 100))
+        vm.finish()
+        #expect(try exportedMetadata().faceDistance?.check == .bypassed)
+    }
+
+    @Test func rotatingDuringPositioningReturnsToIdle() {
+        let vm = makeVM()
+        vm.startPositioning()
+        vm.updateViewport(width: 390, height: 844)
+        #expect(vm.phase == .idle)
+        #expect(provider.stopCount == 1)
+        #expect(vm.positioning == .noFace)
+    }
+
+    // MARK: - Trial naming
+
+    @Test func completedRecordingsGetSequentialDescriptiveNames() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        experiment.defaults.set("p02", forKey: ExperimentLog.idKey)
+        for _ in 0..<2 {
+            let vm = makeVM(uploader: nil)
+            recordAndFinish(vm)
+        }
+        let names = exportedSessions().map(\.lastPathComponent).sorted()
+        #expect(names.count == 2)
+        #expect(names[0].hasPrefix("P02_T001_OKN_RIGHT_"))
+        #expect(names[1].hasPrefix("P02_T002_OKN_RIGHT_"))
+        for name in names {
+            let files = try FileManager.default.contentsOfDirectory(atPath: outputDir.appendingPathComponent(name).path)
+            #expect(Set(files) == [name + ".csv", name + ".json"])
+        }
+    }
+
+    @Test func failedUploadDoesNotReuseTheTrialNumber() async throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        experiment.defaults.set("P02", forKey: ExperimentLog.idKey)
+        let first = makeVM(uploader: FakeUploader(failuresBeforeSuccess: 5))
+        recordAndFinish(first)
+        await first.uploadTask?.value
+        guard case .failed = first.upload else { Issue.record("expected failed upload"); return }
+        let second = makeVM(uploader: nil)
+        recordAndFinish(second)
+        let names = exportedSessions().map(\.lastPathComponent).sorted()
+        #expect(names.map { String($0.prefix(8)) } == ["P02_T001", "P02_T002"])
+    }
+
+    @Test func retryExportKeepsTheSameNameAndNumber() throws {
+        try Data().write(to: outputDir)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = makeVM(uploader: nil)
+        recordAndFinish(vm)
+        #expect(vm.canRetryExport)
+        try FileManager.default.removeItem(at: outputDir)
+        vm.retryExport()
+        #expect(exportedSessions().map { String($0.lastPathComponent.prefix(8)) } == ["EXP_T001"])
+        #expect(experiment.nextTrialNumber(for: "EXP") == 2)
+    }
+
+    @Test func cancelledOrEmptyRecordingsDoNotUseANumber() {
+        let vm = makeVM()
+        vm.start()
+        provider.emit(Fixture.tracked(at: 100))
+        vm.cancel()
+        let empty = makeVM(now: 100)
+        empty.start()
+        provider.emit(Fixture.tracked(at: 99))      // dropped → zero samples
+        empty.finish()
+        #expect(experiment.nextTrialNumber(for: "EXP") == 1)
+    }
+
+    @Test func leftwardDirectionIsSavedAndNamed() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = TestViewModel(provider: provider,
+                               stimulus: StimulusEngine(config: StimulusConfig(mode: .fixationMovingStripes,
+                                                                               direction: .leftward)),
+                               duration: 1000, outputDirectory: outputDir, uploader: { nil },
+                               experiment: experiment, now: { 100 })
+        vm.updateViewport(width: 844, height: 390)
+        recordAndFinish(vm)
+        let meta = try exportedMetadata()
+        #expect(meta.stimulus.direction == .leftward)
+        #expect(meta.recordingName?.contains("_FIXMOVE_LEFT_") == true)
+    }
 }
+
 
 /// Test-only uploader: fails a set number of times, then succeeds.
 final class FakeUploader: RecordingUploading {

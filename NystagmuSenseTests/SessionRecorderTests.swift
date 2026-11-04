@@ -117,7 +117,10 @@ struct SessionRecorderTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let meta = try decoder.decode(SessionMetadata.self, from: Data(contentsOf: files.metadata))
-        #expect(meta.schemaVersion == 3)
+        #expect(meta.schemaVersion == 4)
+        #expect(meta.recordingName == files.csv.deletingPathExtension().lastPathComponent)
+        #expect(meta.experimentID == nil)          // no name assigned → legacy NS_ stem
+        #expect(meta.faceDistance?.check == .notPerformed)
         #expect(meta.stimulus.trialMode == .okn)
         #expect(meta.fixationDot == nil)
         #expect(files.csv.lastPathComponent.hasSuffix("_okn.csv"))
