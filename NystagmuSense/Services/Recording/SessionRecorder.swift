@@ -40,6 +40,10 @@ struct SessionRecorder {
     let duration: TimeInterval
     let stimulus: StimulusEngine
     let viewport: StimulusViewport?
+    /// Descriptive name, assigned when the recording finishes; nil keeps the
+    /// legacy `NS_…` stem.
+    var name: RecordingName?
+    var distanceCheck: FaceDistanceSummary.Check = .notPerformed
 
     private(set) var samples: [RecordedSample] = []
     private(set) var droppedOutsideWindow = 0
@@ -137,7 +141,14 @@ struct SessionRecorder {
             stimulus: stimulus.config,
             issues: issues,
             stimulusViewport: viewport,
-            fixationDot: viewport.flatMap { FixationDot(stimulus: stimulus, viewport: $0) }
+            fixationDot: viewport.flatMap { FixationDot(stimulus: stimulus, viewport: $0) },
+            experimentID: name?.experimentID,
+            testTypeName: name.flatMap { TestType(rawValue: $0.experimentID)?.displayName },
+            trialNumber: name?.trialNumber,
+            recordingName: recordingStem,
+            faceDistance: FaceDistanceSummary(
+                distancesCm: samples.map { $0.gaze.faceDistanceMeters.map { Double($0) * 100 } },
+                check: distanceCheck)
         )
     }
 
@@ -145,7 +156,7 @@ struct SessionRecorder {
     func export(to baseDirectory: URL, device: DeviceInfo) throws -> RecordingFiles {
         guard !samples.isEmpty else { throw RecordingError.noSamples }
 
-        let stem = Self.fileStem(startedAt: startedAt, sessionID: sessionID, mode: stimulus.config.trialMode)
+        let stem = recordingStem
         let dir  = baseDirectory.appendingPathComponent(stem, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
@@ -156,7 +167,12 @@ struct SessionRecorder {
         return RecordingFiles(directory: dir, csv: csvURL, metadata: jsonURL)
     }
 
-    /// `NS_<date>_<id>_<mode>`, e.g. `NS_20261101-132525_5E5CDC71_fixstill`.
+    /// Shared stem of the folder, CSV and JSON.
+    var recordingStem: String {
+        name?.stem ?? Self.fileStem(startedAt: startedAt, sessionID: sessionID, mode: stimulus.config.trialMode)
+    }
+
+    /// Legacy `NS_<date>_<id>_<mode>`, e.g. `NS_20261101-132525_5E5CDC71_fixstill`.
     static func fileStem(startedAt: Date, sessionID: UUID, mode: StimulusConfig.TrialMode) -> String {
         let f = DateFormatter()
         f.locale     = Locale(identifier: "en_US_POSIX")

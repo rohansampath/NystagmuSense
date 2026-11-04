@@ -19,7 +19,16 @@ struct StimulusConfig: Codable, Equatable {
 
         var showsFixationDot: Bool { self != .okn }
 
-        /// Suffix for exported file names.
+        /// Mode field of descriptive recording names (RecordingName).
+        var nameCode: String {
+            switch self {
+            case .okn:                   return "OKN"
+            case .fixationMovingStripes: return "FIXMOVE"
+            case .fixationStillStripes:  return "FIXSTILL"
+            }
+        }
+
+        /// Suffix of legacy `NS_…` file names (before schema 4).
         var fileSuffix: String {
             switch self {
             case .okn:                   return "okn"
@@ -60,11 +69,16 @@ struct StimulusConfig: Codable, Equatable {
 
     init() {}
 
-    /// Default stimulus for `mode`. Still-stripe trials record speed 0.
-    init(mode: TrialMode) {
+    /// Default stimulus for `mode`. Still-stripe trials record speed 0;
+    /// `direction` only matters when the stripes move.
+    init(mode: TrialMode, direction: Direction = .rightward) {
         trialMode = mode
+        self.direction = direction
         if mode == .fixationStillStripes { speedPointsPerSecond = 0 }
     }
+
+    /// Whether the stripes move at all (direction is meaningless otherwise).
+    var isMoving: Bool { trialMode != .fixationStillStripes && speedPointsPerSecond != 0 }
 
     private enum CodingKeys: String, CodingKey {
         case stripeWidthRatio, pitchToWidthRatio, speedPointsPerSecond, direction

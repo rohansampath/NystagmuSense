@@ -36,6 +36,10 @@ struct EyeMovementSample: Codable, Equatable {
     var blinkLeft: Float? = nil
     var blinkRight: Float? = nil
 
+    /// Approximate front-camera-to-eye-midpoint distance, metres (see
+    /// FaceDistance). Summarised in the sidecar, not written to the CSV.
+    var faceDistanceMeters: Float? = nil
+
     static func untracked(at timestamp: TimeInterval) -> EyeMovementSample {
         EyeMovementSample(timestamp: timestamp, isTracked: false,
                           lookAtPoint: nil, leftEyeDirection: nil, rightEyeDirection: nil)

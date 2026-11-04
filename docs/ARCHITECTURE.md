@@ -149,7 +149,24 @@ after that (landscape gate, first-tracked-frame start, recording, export) is sha
   `FixationDot` in the sidecar is computed from the same function and the recorded
   `stimulusViewport`.
 - The mode appears in the sidecar (`stimulus.trialMode`, schema 3), the file stem
-  (`_okn`, `_fixmove`, `_fixstill`) and the status card. Older sidecars decode as `okn`.
+  and the status card. Older sidecars decode as `okn`.
+
+## Naming, face distance and direction (schema 4)
+
+- `RecordingName` (Models/ExperimentNaming.swift) builds
+  `{experiment}_T{###}_{MODE}_{DIR}_{UTC yyyyMMdd_HHmmss}` from the trial's own
+  `StimulusConfig`. `TestViewModel.finish()` takes the number from `ExperimentLog`
+  (UserDefaults), before export, so it is never reused. `SessionRecorder.recordingStem`
+  falls back to the legacy `NS_` stem when no name is set.
+- `FaceDistance.meters` (Services/EyeTracking/FaceDistance.swift) is the camera-to-eye-midpoint
+  distance from one ARFrame: `frame.camera.transform` and `face.transform` (world), times
+  the eye transforms (relative to the face). `ARKitGazeProvider` attaches it to each
+  `EyeMovementSample`. The CSV doesn't change; `FaceDistanceSummary` goes into the sidecar.
+- `.positioning` phase: the same provider runs, and `DistanceGate` (moving average with
+  weight 0.2; range 25–30 cm; 1 s hold) enables `start()`. Bypassing is recorded as
+  `bypassed`. Calling `start()` from `.idle` skips positioning (`notPerformed`).
+- Direction is the existing `StimulusConfig.direction` (since schema 1), now selectable;
+  `StimulusConfig(mode:direction:)`. Speed magnitude is unchanged, and still mode ignores it.
 
 ## Offline OKN detection and future app integration
 

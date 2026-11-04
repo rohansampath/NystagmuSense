@@ -29,7 +29,8 @@ class QuietHandler(receive_recordings.Handler):
         pass
 
 
-class ReceiverTests(unittest.TestCase):
+class ServerTestCase(unittest.TestCase):
+    """Starts a receiver on an ephemeral port with a temporary trials directory."""
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.trials = Path(self.tmp.name)
@@ -63,8 +64,12 @@ class ReceiverTests(unittest.TestCase):
     def saved_folders(self):
         return sorted(p.name for p in self.trials.iterdir())
 
+
+
+class ReceiverTests(ServerTestCase):
     def test_health(self):
-        self.assertEqual(self.request("GET", "/health"), (200, {"status": "ok"}))
+        self.assertEqual(self.request("GET", "/health"),
+                         (200, {"status": "ok", "name_contract": receive_recordings.NAME_CONTRACT}))
 
     def test_health_rejects_wrong_token(self):
         status, _ = self.request("GET", "/health", token="wrong")
@@ -141,6 +146,84 @@ class ReceiverTests(unittest.TestCase):
 
     def test_unknown_path(self):
         self.assertEqual(self.request("GET", "/trials")[0], 404)
+
+
+class DescriptiveNameTests(ServerTestCase):
+    """Schema-4 names: {experiment}_T###_{MODE}_{DIRECTION}_{UTC}."""
+    NAME = "P02_T001_OKN_RIGHT_20261104_143022"
+
+    def test_descriptive_name_saved_as_matching_pair(self):
+        self.assertEqual(self.upload(stem=self.NAME)[0], 201)
+        self.assertEqual(sorted(p.name for p in (self.trials / self.NAME).iterdir()),
+                         [self.NAME + ".csv", self.NAME + ".json"])
+
+    def test_all_modes_and_directions_accepted(self):
+        for stem in ("P02_T002_FIXMOVE_LEFT_20261104_143105", "P02_T003_FIXSTILL_NONE_20261104_143145",
+                     "PILOT-3_T1000_OKN_LEFT_20261104_143145"):
+            self.assertEqual(self.upload(stem=stem)[0], 201, stem)
+
+    def test_duplicate_descriptive_upload_never_overwrites(self):
+        self.assertEqual(self.upload(stem=self.NAME)[0], 201)
+        self.assertEqual(self.upload(stem=self.NAME), (200, {"status": "already_received", "stem": self.NAME}))
+        status, _ = self.upload(stem=self.NAME, csv=CSV + "0.033333,100.033333,1\n")
+        self.assertEqual(status, 409)
+        self.assertEqual((self.trials / self.NAME / f"{self.NAME}.csv").read_text(), CSV)
+
+    def test_malformed_descriptive_names_rejected(self):
+        for stem in ("p02_T001_OKN_RIGHT_20261104_143022",      # lower case
+                     "P02_T01_OKN_RIGHT_20261104_143022",       # 2-digit trial
+                     "P02_T001_OKN_UP_20261104_143022",
+                     "P02_T001_okn_RIGHT_20261104_143022",
+                     "P_02_T001_OKN_RIGHT_20261104_143022",
+                     "P02_T001_OKN_RIGHT_20261104_143022/../x",
+                     "P02_T001_OKN_RIGHT_20261104"):
+            self.assertEqual(self.upload(stem=stem)[0], 400, stem)
+        self.assertEqual(self.saved_folders(), [])
+
+
+FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "recording_names.json").read_text())
+
+
+class SharedNameContractTests(ServerTestCase):
+    """Names from tests/fixtures/recording_names.json, the same file the Swift
+    tests check RecordingName against, so app and receiver can't drift apart."""
+
+    def test_contract_versions_match(self):
+        self.assertEqual(FIXTURE["contract_version"], receive_recordings.NAME_CONTRACT)
+
+    def test_every_app_generated_name_is_accepted_in_sequence(self):
+        for case in FIXTURE["generated"]:          # sequential trials, every mode/direction/test type
+            status, data = self.upload(stem=case["name"])
+            self.assertEqual((status, data.get("status")), (201, "saved"), case["name"])
+        for case in FIXTURE["generated"]:
+            folder = self.trials / case["name"]
+            self.assertEqual(sorted(p.name for p in folder.iterdir()),
+                             [case["name"] + ".csv", case["name"] + ".json"])
+
+    def test_older_names_still_accepted(self):
+        for stem in FIXTURE["legacy_valid"]:
+            self.assertEqual(self.upload(stem=stem)[0], 201, stem)
+
+    def test_invalid_and_malicious_names_rejected_with_code(self):
+        for stem in FIXTURE["invalid"]:
+            status, data = self.upload(stem=stem)
+            self.assertEqual((status, data["code"]), (400, "invalid_name"), stem)
+        self.assertEqual(self.saved_folders(), [])
+
+    def test_retry_is_idempotent_and_conflict_never_overwrites(self):
+        name = FIXTURE["generated"][1]["name"]      # DIR_T002_OKN_LEFT_...
+        self.assertEqual(self.upload(stem=name)[0], 201)
+        self.assertEqual(self.upload(stem=name), (200, {"status": "already_received", "stem": name}))
+        status, data = self.upload(stem=name, meta=json.dumps({"schemaVersion": 5, "other": True}))
+        self.assertEqual((status, data["code"]), (409, "conflict"))
+        self.assertEqual((self.trials / name / f"{name}.json").read_text(), META)
+        self.assertEqual(self.saved_folders(), [name])
+
+    def test_error_codes_for_token_and_malformed_body(self):
+        status, data = self.upload(token="wrong")
+        self.assertEqual((status, data["code"]), (401, "unauthorized"))
+        status, data = self.request("POST", "/upload", b"not json")
+        self.assertEqual((status, data["code"]), (400, "malformed"))
 
 
 class ParseTests(unittest.TestCase):

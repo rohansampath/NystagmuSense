@@ -5,7 +5,8 @@
 //  Created by Rohan Sampath on 6/30/25.
 //
 //  Lightweight session coordinator:
-//  start gaze provider → first tracked frame starts clock + stimulus → record for
+//  optional positioning (camera on, face-distance gate) → arm → first tracked
+//  frame starts clock + stimulus → record for
 //  `duration` → stop → export CSV/JSON → report outcome → upload to the Mac
 //  (optional; see Services/Transfer). The local files are always kept.
 //
@@ -28,7 +29,8 @@ final class TestViewModel: ObservableObject {
 
     enum Phase: Equatable {
         case idle
-        case starting                       // provider started, waiting for first frame
+        case positioning                    // camera on, showing face distance; not armed
+        case starting                       // armed, waiting for the first tracked frame
         case recording
         case finished(RecordingSummary)
         case failed(String)
@@ -56,6 +58,8 @@ final class TestViewModel: ObservableObject {
     @Published private(set) var upload: UploadStatus?
     /// The in-flight upload, exposed so tests can await it.
     private(set) var uploadTask: Task<Void, Never>?
+    /// Pre-trial face-distance readout (`.positioning` only).
+    @Published private(set) var positioning: DistanceGate.Status = .noFace
 
     var isLandscape: Bool { viewport?.isLandscape == true }
 
@@ -66,11 +70,14 @@ final class TestViewModel: ObservableObject {
     private let startupTimeout: TimeInterval
     private let outputDirectory: URL
     private let makeUploader: () -> RecordingUploading?
+    private let experiment: ExperimentLog
     private let now: () -> TimeInterval
     private var recorder: SessionRecorder?
     private var timer: Task<Void, Never>?
-    /// Whether any camera frame (tracked or not) has arrived since `start()`.
+    /// Whether any camera frame (tracked or not) has arrived since the camera started.
     private var framesSeen = false
+    private var gate = DistanceGate()
+    private var distanceCheck: FaceDistanceSummary.Check = .notPerformed
 
     init(provider: GazeProvider = ARKitGazeProvider(),
          stimulus: StimulusEngine = StimulusEngine(),
@@ -78,6 +85,7 @@ final class TestViewModel: ObservableObject {
          startupTimeout: TimeInterval = 5,
          outputDirectory: URL = SessionRecorder.defaultDirectory,
          uploader: @escaping () -> RecordingUploading? = RecordingUploader.fromSavedSettings,
+         experiment: ExperimentLog = ExperimentLog(),
          now: @escaping () -> TimeInterval = CACurrentMediaTime) {
         self.provider        = provider
         self.stimulus        = stimulus
@@ -85,24 +93,54 @@ final class TestViewModel: ObservableObject {
         self.startupTimeout  = startupTimeout
         self.outputDirectory = outputDirectory
         self.makeUploader    = uploader
+        self.experiment      = experiment
         self.now             = now
     }
 
     // MARK: - Lifecycle
 
-    /// Safe to call repeatedly (e.g. from `onAppear`); only the first call starts a session.
-    func start() {
+    /// Turns the camera on and shows the face distance before a trial. Uses the
+    /// same provider/ARSession that then records.
+    func startPositioning() {
         guard phase == .idle, isLandscape else { return }
+        startCamera(as: .positioning)
+    }
+
+    /// Arms the recording: the next tracked frame starts the clock and stimulus.
+    /// From `.positioning` this needs the distance gate to be ready, unless
+    /// `bypassDistanceCheck` (recorded as such in the sidecar). From `.idle` it
+    /// starts the camera directly (no positioning; recorded as notPerformed).
+    /// Safe to call repeatedly; only the first effective call arms.
+    func start(bypassDistanceCheck: Bool = false) {
+        switch phase {
+        case .idle:
+            guard isLandscape else { return }
+            distanceCheck = .notPerformed
+            startCamera(as: .starting)
+        case .positioning:
+            guard bypassDistanceCheck || gate.status.isReady else { return }
+            distanceCheck = bypassDistanceCheck ? .bypassed : .passed
+            phase = .starting
+            // The camera is already running; keep the no-frames timeout until it is.
+            if framesSeen { scheduleNoTrackedFaceTimeout() }
+        default:
+            break
+        }
+    }
+
+    private func startCamera(as next: Phase) {
         guard provider.isSupported else { fail(.unsupportedDevice); return }
 
         // ARKitGazeProvider delivers callbacks on the main thread.
         provider.onSample = { [weak self] s in MainActor.assumeIsolated { self?.ingest(s) } }
         provider.onError  = { [weak self] e in MainActor.assumeIsolated { self?.handle(e) } }
 
-        phase = .starting
+        phase = next
         framesSeen = false
+        gate = DistanceGate()
+        positioning = gate.status
         provider.start()                    // may report an error synchronously
-        if phase == .starting { scheduleNoFramesTimeout() }
+        if phase == next { scheduleNoFramesTimeout() }
     }
 
     /// Clears a failed session (other than a failed export, which keeps its
@@ -124,9 +162,9 @@ final class TestViewModel: ObservableObject {
         guard viewport != next else { return }
         viewport = next
         switch phase {
-        case .starting where !next.isLandscape:
+        case .starting where !next.isLandscape, .positioning where !next.isLandscape:
             stopCapture()
-            phase = .idle
+            resetToIdle()
         case .recording:
             recorder?.note("Stimulus surface changed size or orientation; recording is partial.")
             finish()
@@ -137,14 +175,21 @@ final class TestViewModel: ObservableObject {
 
     /// Stops tracking and exports. Idempotent: only the first call while recording has any effect.
     func finish() {
-        guard phase == .recording, let recorder else { return }
+        guard phase == .recording, recorder != nil else { return }
         stopCapture()
 
-        guard !recorder.samples.isEmpty else {
+        guard recorder?.samples.isEmpty == false else {
             phase = .failed(RecordingError.noSamples.localizedDescription)
             return
         }
-        export(recorder)
+        // Named once; Retry Export reuses the name. The counter advances only
+        // when the files are saved locally (export), not on upload.
+        if recorder?.name == nil, let startedAt = recorder?.startedAt {
+            recorder?.name = RecordingName(experimentID: experiment.testType.code,
+                                           trialNumber: experiment.nextTrialNumber,
+                                           stimulus: stimulus.config, startedAt: startedAt)
+        }
+        if let recorder { export(recorder) }
     }
 
     /// Re-attempts a failed export of the samples still held in memory.
@@ -170,13 +215,13 @@ final class TestViewModel: ObservableObject {
         case (.inactive, .recording), (.background, .recording):
             recorder?.note("App left the foreground; recording is partial.")
             finish()
-        case (.background, .starting):
+        case (.background, .starting), (.background, .positioning):
             stopCapture()
             resetToIdle()
-        case (.inactive, .starting) where !framesSeen:
+        case (.inactive, .starting) where !framesSeen, (.inactive, .positioning) where !framesSeen:
             timer?.cancel()
             timer = nil
-        case (.active, .starting) where !framesSeen:
+        case (.active, .starting) where !framesSeen, (.active, .positioning) where !framesSeen:
             scheduleNoFramesTimeout()
         default:
             break
@@ -185,7 +230,7 @@ final class TestViewModel: ObservableObject {
 
     /// Called when the user leaves early. Discards the partial recording.
     func cancel() {
-        guard phase == .starting || phase == .recording else { return }
+        guard phase == .positioning || phase == .starting || phase == .recording else { return }
         stopCapture()
         phase = .cancelled
     }
@@ -193,12 +238,23 @@ final class TestViewModel: ObservableObject {
     // MARK: - Provider events
 
     private func ingest(_ s: EyeMovementSample) {
+        if phase == .positioning {
+            if !framesSeen {
+                // The camera works. Positioning waits for the user, so no face timeout.
+                framesSeen = true
+                timer?.cancel()
+                timer = nil
+            }
+            gate.update(distanceCm: s.isTracked ? s.faceDistanceMeters.map { Double($0) * 100 } : nil,
+                        at: s.timestamp)
+            if positioning != gate.status { positioning = gate.status }
+            if faceTracked != s.isTracked { faceTracked = s.isTracked }
+            return
+        }
         if phase == .starting, !framesSeen {
             // The camera is running; now give the user time to be found.
             framesSeen = true
-            schedule(after: startupTimeout) { [weak self] in
-                if self?.phase == .starting { self?.fail(.noTrackedFace) }
-            }
+            scheduleNoTrackedFaceTimeout()
         }
         if phase == .starting, s.isTracked { beginRecording() }
         guard phase == .recording else { return }
@@ -209,6 +265,7 @@ final class TestViewModel: ObservableObject {
     private func export(_ recorder: SessionRecorder) {
         do {
             let files = try recorder.export(to: outputDirectory, device: DeviceInfo.current())
+            if let trial = recorder.name?.trialNumber { experiment.commitTrialNumber(trial) }
             canRetryExport = false
             phase = .finished(RecordingSummary(files: files,
                                                sampleCount: recorder.samples.count,
@@ -241,6 +298,7 @@ final class TestViewModel: ObservableObject {
         let t0 = now()
         recorder          = SessionRecorder(startUptime: t0, duration: duration, stimulus: stimulus,
                                             viewport: viewport)
+        recorder?.distanceCheck = distanceCheck
         stimulusStartTime = t0
         phase             = .recording
         schedule(after: duration) { [weak self] in self?.finish() }
@@ -248,7 +306,7 @@ final class TestViewModel: ObservableObject {
 
     private func handle(_ error: GazeTrackingError) {
         switch phase {
-        case .starting:
+        case .starting, .positioning:
             fail(error)
         case .recording:
             // Keep what was captured; the gap/failure is recorded in the sidecar.
@@ -268,7 +326,13 @@ final class TestViewModel: ObservableObject {
 
     private func scheduleNoFramesTimeout() {
         schedule(after: startupTimeout) { [weak self] in
-            if self?.phase == .starting { self?.fail(.noFramesReceived) }
+            if self?.phase == .starting || self?.phase == .positioning { self?.fail(.noFramesReceived) }
+        }
+    }
+
+    private func scheduleNoTrackedFaceTimeout() {
+        schedule(after: startupTimeout) { [weak self] in
+            if self?.phase == .starting { self?.fail(.noTrackedFace) }
         }
     }
 
@@ -278,6 +342,9 @@ final class TestViewModel: ObservableObject {
         faceTracked       = false
         trackedCount      = 0
         framesSeen        = false
+        gate              = DistanceGate()
+        positioning       = gate.status
+        distanceCheck     = .notPerformed
         phase             = .idle
     }
 

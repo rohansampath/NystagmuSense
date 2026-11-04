@@ -63,7 +63,10 @@ final class ARKitGazeProvider: NSObject, GazeProvider, ARSessionDelegate {
             leftEyeDirection:  left,
             rightEyeDirection: right,
             blinkLeft:         face.blendShapes[.eyeBlinkLeft]?.floatValue,
-            blinkRight:        face.blendShapes[.eyeBlinkRight]?.floatValue
+            blinkRight:        face.blendShapes[.eyeBlinkRight]?.floatValue,
+            faceDistanceMeters: FaceDistance.meters(camera: frame.camera.transform, face: face.transform,
+                                                    leftEye: face.leftEyeTransform,
+                                                    rightEye: face.rightEyeTransform)
         ))
     }
 

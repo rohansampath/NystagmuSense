@@ -18,7 +18,10 @@ struct RecordingStatusCard: View {
     let canRetryExport: Bool
     let canTryAgain: Bool
     let upload: TestViewModel.UploadStatus?
+    let positioning: DistanceGate.Status
+    let onCheckPosition: () -> Void
     let onStart: () -> Void
+    let onStartWithoutCheck: () -> Void
     let onRetryExport: () -> Void
     let onRetryUpload: () -> Void
     let onTryAgain: () -> Void
@@ -35,10 +38,26 @@ struct RecordingStatusCard: View {
                 Text(isLandscape
                      ? stimulus.participantInstruction
                      : "Landscape mode is required. If the screen won't rotate, turn off Portrait Orientation Lock.")
-                Button("Start Recording", action: onStart)
+                Button("Check Position", action: onCheckPosition)
                     .buttonStyle(.borderedProminent)
                     .disabled(!isLandscape)
                 Button("Cancel", action: onClose)
+
+            case .positioning:
+                Label(positioning.message,
+                      systemImage: positioning.isReady ? "checkmark.circle.fill" : "ruler")
+                    .font(.headline)
+                    .foregroundStyle(positioning.isReady ? .green : positioning == .noFace ? .red : .orange)
+                Text("Hold the phone about \(Int(DistanceGate.recommendedCm.lowerBound))–\(Int(DistanceGate.recommendedCm.upperBound)) cm from your eyes (approximate ARKit camera-to-eye distance, uncalibrated).")
+                    .font(.caption)
+                HStack {
+                    Button("Start Trial", action: onStart)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!positioning.isReady)
+                    Button("Cancel", action: onClose)
+                }
+                Button("Start without distance check (development)", action: onStartWithoutCheck)
+                    .font(.caption)
 
             case .starting:
                 Text("Finding your face…")
@@ -58,6 +77,8 @@ struct RecordingStatusCard: View {
 
             case .finished(let s):
                 Text("Recording saved").font(.headline)
+                Text(s.files.csv.deletingPathExtension().lastPathComponent)
+                    .font(.caption.monospaced())
                 Text("\(s.sampleCount) samples (\(s.trackedCount) with face tracked)")
                 if let hz = s.sampleRateHz {
                     Text(String(format: "Observed rate %.1f Hz", hz))

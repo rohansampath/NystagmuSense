@@ -29,7 +29,7 @@ final class NystagmuSenseUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         app.buttons["Record 10 Seconds"].tap()
-        let start = app.buttons["Start Recording"]
+        let start = app.buttons["Check Position"]
         XCTAssertTrue(start.waitForExistence(timeout: 5))
         XCTAssertFalse(start.isEnabled)
         XCTAssertTrue(app.staticTexts["Rotate your phone sideways"].exists)
