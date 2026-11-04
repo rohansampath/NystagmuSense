@@ -1,0 +1,93 @@
+{
+ "T01": {
+  "label": "V1",
+  "task": "centre 10 s",
+  "mean": -5.778046624609573,
+  "sd": 0.35814587643786794,
+  "range": 2.0404110307618746,
+  "drift_deg_per_s": -0.041518612434425776,
+  "median_1s_sd": 0.22932069988029163,
+  "lr_corr": 0.9890944450465603,
+  "lr_offset_sd": 0.053054191337731836,
+  "blink_events": 0,
+  "fast": 0,
+  "fast_blink_adjacent": 0,
+  "beats": 0,
+  "valid_pct": 100.0
+ },
+ "T02": {
+  "label": "V2",
+  "task": "left 5 s \u2192 right 5 s",
+  "first": -2.433624891297529,
+  "second": -11.884766712233263,
+  "step": -9.451141820935735,
+  "left_eye_step": -9.644109848791912,
+  "right_eye_step": -9.258173793079553,
+  "crossing_s": [
+   4.383581
+  ],
+  "lr_corr": 0.9999737661540363,
+  "lr_offset_sd": 0.19553182544624864,
+  "blink_events": 0,
+  "fast": 2,
+  "fast_blink_adjacent": 0,
+  "beats": 0,
+  "valid_pct": 100.0
+ },
+ "T03": {
+  "label": "V3",
+  "task": "right 5 s \u2192 left 5 s",
+  "first": -9.944829106448934,
+  "second": 6.0829022009800315,
+  "step": 16.027731307428965,
+  "left_eye_step": 16.229750668298927,
+  "right_eye_step": 15.825711946559005,
+  "crossing_s": [
+   4.916379
+  ],
+  "lr_corr": 0.9999876887163928,
+  "lr_offset_sd": 0.19952717418894828,
+  "blink_events": 0,
+  "fast": 3,
+  "fast_blink_adjacent": 0,
+  "beats": 0,
+  "valid_pct": 100.0
+ },
+ "T04": {
+  "label": "V4",
+  "task": "alternate L/R every ~2 s",
+  "median": -2.5490368455909347,
+  "switches": [
+   0.35142,
+   1.40124,
+   3.15094,
+   4.567363,
+   6.167087,
+   7.366881,
+   8.733312
+  ],
+  "lr_corr": 0.9999694250063728,
+  "lr_offset_sd": 0.1786492321182648,
+  "blink_events": 0,
+  "fast": 8,
+  "fast_blink_adjacent": 0,
+  "beats": 0,
+  "valid_pct": 100.0
+ },
+ "T05": {
+  "label": "V5",
+  "task": "centre + deliberate blinks",
+  "mean": -3.3368113711880514,
+  "sd": 0.9104206469667796,
+  "range": 3.668817405719915,
+  "drift_deg_per_s": 0.2358434870797727,
+  "median_1s_sd": 0.4846420064035365,
+  "lr_corr": 0.9996853451829385,
+  "lr_offset_sd": 0.08977679601115185,
+  "blink_events": 15,
+  "fast": 1,
+  "fast_blink_adjacent": 1,
+  "beats": 0,
+  "valid_pct": 60.86956521739131
+ }
+}
