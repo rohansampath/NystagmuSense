@@ -15,9 +15,10 @@ struct TestViewModelTests {
     let outputDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 
     /// Long duration so the auto-finish timer never fires during a test.
-    func makeVM(now: Double = 100, startupTimeout: Double = 1000) -> TestViewModel {
+    func makeVM(now: Double = 100, startupTimeout: Double = 1000,
+                uploader: RecordingUploading? = nil) -> TestViewModel {
         let vm = TestViewModel(provider: provider, duration: 1000, startupTimeout: startupTimeout,
-                      outputDirectory: outputDir, now: { now })
+                      outputDirectory: outputDir, uploader: { uploader }, now: { now })
         vm.updateViewport(width: 844, height: 390)
         return vm
     }
@@ -302,5 +303,103 @@ struct TestViewModelTests {
         }
         #expect(s.sampleCount == 1)
         #expect(s.issues.count == 1)
+    }
+
+    // MARK: - Mac upload
+
+    /// Records one sample and finishes, leaving the VM in `.finished`.
+    func recordAndFinish(_ vm: TestViewModel) {
+        vm.start()
+        provider.emit(Fixture.tracked(at: 100.0))
+        vm.finish()
+    }
+
+    @Test func notConfiguredMeansSavedLocallyOnly() {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let vm = makeVM(uploader: nil)
+        recordAndFinish(vm)
+        #expect(vm.upload == .notConfigured)
+        #expect(exportedSessions().count == 1)
+    }
+
+    @Test func uploadsBothFinalizedFilesAfterLocalSave() async throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let uploader = FakeUploader()
+        let vm = makeVM(uploader: uploader)
+        recordAndFinish(vm)
+        #expect(vm.upload == .uploading)
+        await vm.uploadTask?.value
+        #expect(vm.upload == .uploaded)
+        guard case .finished(let s) = vm.phase else { Issue.record("expected finished"); return }
+        #expect(uploader.uploaded == [s.files])
+        #expect(uploader.sawFilesOnDisk)
+        // The local copy is kept after a successful upload.
+        #expect(FileManager.default.fileExists(atPath: s.files.csv.path))
+        #expect(FileManager.default.fileExists(atPath: s.files.metadata.path))
+    }
+
+    @Test func failedUploadKeepsLocalRecordingAndCanBeRetried() async throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let uploader = FakeUploader(failuresBeforeSuccess: 1)
+        let vm = makeVM(uploader: uploader)
+        recordAndFinish(vm)
+        await vm.uploadTask?.value
+        guard case .failed = vm.upload else { Issue.record("expected failed upload, got \(String(describing: vm.upload))"); return }
+        guard case .finished(let s) = vm.phase else { Issue.record("expected finished"); return }
+        #expect(FileManager.default.fileExists(atPath: s.files.csv.path))
+        #expect(FileManager.default.fileExists(atPath: s.files.metadata.path))
+        #expect(!vm.canRetryExport)
+
+        vm.retryUpload()
+        await vm.uploadTask?.value
+        #expect(vm.upload == .uploaded)
+        #expect(uploader.uploaded == [s.files, s.files])
+        #expect(exportedSessions().count == 1)
+    }
+
+    @Test func retryUploadDoesNothingUnlessUploadFailed() async {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let uploader = FakeUploader()
+        let vm = makeVM(uploader: uploader)
+        recordAndFinish(vm)
+        await vm.uploadTask?.value
+        vm.retryUpload()
+        await vm.uploadTask?.value
+        #expect(uploader.uploaded.count == 1)
+    }
+
+    @Test func failedExportUploadsNothingUntilRetryExportSucceeds() async throws {
+        try Data().write(to: outputDir)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let uploader = FakeUploader()
+        let vm = makeVM(uploader: uploader)
+        recordAndFinish(vm)
+        #expect(vm.upload == nil)
+        #expect(uploader.uploaded.isEmpty)
+
+        try FileManager.default.removeItem(at: outputDir)
+        vm.retryExport()
+        await vm.uploadTask?.value
+        #expect(vm.upload == .uploaded)
+        #expect(uploader.uploaded.count == 1)
+    }
+}
+
+/// Test-only uploader: fails a set number of times, then succeeds.
+final class FakeUploader: RecordingUploading {
+    private var failuresLeft: Int
+    private(set) var uploaded: [RecordingFiles] = []
+    private(set) var sawFilesOnDisk = false
+
+    init(failuresBeforeSuccess: Int = 0) { failuresLeft = failuresBeforeSuccess }
+
+    func upload(_ files: RecordingFiles) async throws {
+        uploaded.append(files)
+        sawFilesOnDisk = FileManager.default.fileExists(atPath: files.csv.path)
+            && FileManager.default.fileExists(atPath: files.metadata.path)
+        if failuresLeft > 0 {
+            failuresLeft -= 1
+            throw UploadError.unreachable("simulated")
+        }
     }
 }

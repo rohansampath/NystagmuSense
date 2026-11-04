@@ -6,6 +6,13 @@
 	<string>NystagmuSense uses the front TrueDepth camera to record eye movements during the test. Camera images are not saved; recordings stay on this device unless you export them.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>NystagmuSense sends finished recordings to the Mac you set up under Mac Transfer, over your local Wi-Fi.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 </dict>

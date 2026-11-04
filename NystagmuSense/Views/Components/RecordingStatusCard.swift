@@ -2,7 +2,8 @@
 //  RecordingStatusCard.swift
 //  NystagmuSense
 //
-//  Small overlay showing recording progress / outcome and the export button.
+//  Small overlay showing recording progress / outcome, Mac upload status and
+//  the export button.
 //
 
 import SwiftUI
@@ -16,8 +17,10 @@ struct RecordingStatusCard: View {
     let stimulus: StimulusConfig
     let canRetryExport: Bool
     let canTryAgain: Bool
+    let upload: TestViewModel.UploadStatus?
     let onStart: () -> Void
     let onRetryExport: () -> Void
+    let onRetryUpload: () -> Void
     let onTryAgain: () -> Void
     let onClose: () -> Void
 
@@ -63,6 +66,7 @@ struct RecordingStatusCard: View {
                     Text("Warning: no face was detected.").foregroundStyle(.red)
                 }
                 ForEach(s.issues, id: \.self) { Text($0).foregroundStyle(.orange) }
+                if let upload { uploadStatus(upload) }
                 HStack {
                     ShareLink(items: [s.files.csv, s.files.metadata]) {
                         Label("Export", systemImage: "square.and.arrow.up")
@@ -91,5 +95,21 @@ struct RecordingStatusCard: View {
         .font(.callout)
         .padding(12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder private func uploadStatus(_ status: TestViewModel.UploadStatus) -> some View {
+        switch status {
+        case .notConfigured:
+            Label("Saved locally (Mac transfer not set up)", systemImage: "iphone")
+        case .uploading:
+            Label("Saved locally · Uploading to Mac…", systemImage: "arrow.up.circle")
+        case .uploaded:
+            Label("Uploaded to Mac", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+        case .failed(let message):
+            Label("Upload failed: saved locally", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+            Text(message).font(.caption)
+            Button("Retry Upload", action: onRetryUpload).buttonStyle(.bordered)
+        }
     }
 }
