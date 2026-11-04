@@ -60,7 +60,9 @@ struct SessionMetadata: Codable, Equatable {
     ///    also the file-name suffix (_okn / _fixmove / _fixstill).
     /// 4: adds experimentID, trialNumber, recordingName (descriptive file stem
     ///    `{experiment}_{T###}_{MODE}_{DIR}_{UTC}`) and faceDistance.
-    var schemaVersion = 4
+    /// 5: experimentID is now a predefined test-type code (TestType); adds
+    ///    testTypeName. Trial numbers are shared by all test types.
+    var schemaVersion = 5
     let sessionID: UUID
     let startedAt: Date
     let device: DeviceInfo
@@ -78,6 +80,8 @@ struct SessionMetadata: Codable, Equatable {
     var fixationDot: FixationDot? = nil
     /// Schema 4+; nil in older sidecars.
     var experimentID: String? = nil
+    /// Schema 5+: display name of the test type whose code is `experimentID`.
+    var testTypeName: String? = nil
     var trialNumber: Int? = nil
     var recordingName: String? = nil
     var faceDistance: FaceDistanceSummary? = nil
@@ -122,10 +126,13 @@ struct SessionMetadata: Codable, Equatable {
             + "stim_displacement_pt increasing); not meaningful when speed is 0 (fixationStillStripes)",
         "sessionID": "unique recording ID (UUID)",
         "startedAt": "recording start, ISO 8601 UTC; also the timestamp in recordingName",
-        "experimentID": "experiment identifier entered on the menu (schema 4+)",
-        "trialNumber": "per-experiment trial counter, never reused on this phone (schema 4+)",
+        "experimentID": "test-type code chosen on the menu, e.g. DIR (schema 5+); free-text experiment ID in schema 4",
+        "testTypeName": "display name of that test type, e.g. Direction Test (schema 5+)",
+        "trialNumber": "trial counter shared by all test types on this phone, advanced when a recording is "
+            + "saved locally; never reused (schema 5+; per experiment ID in schema 4)",
         "recordingName": "stem shared by the folder, CSV and JSON: "
-            + "{experimentID}_T{trial:03}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}; "
+            + "{experimentID}_T{trial:03}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss} "
+            + "(file-name contract 1); "
             + "legacy NS_ stem when no experiment name was assigned",
         "faceDistance": "approximate front-camera-to-eye-midpoint distance from ARKit, cm, uncalibrated; "
             + "check = passed / bypassed / notPerformed for the pre-trial positioning gate",

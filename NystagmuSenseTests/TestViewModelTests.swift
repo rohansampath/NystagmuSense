@@ -413,8 +413,8 @@ struct TestViewModelTests {
         #expect(vm.phase == .positioning)
         #expect(provider.startCount == 1)
         #expect(vm.positioning == .noFace)
-        _ = position(vm, cm: 25, seconds: 0.5)
-        #expect(vm.positioning == .tooClose(25))
+        _ = position(vm, cm: 20, seconds: 0.5)
+        #expect(vm.positioning == .tooClose(20))
         vm.start()
         #expect(vm.phase == .positioning)          // not ready → Start does nothing
         #expect(vm.stimulusStartTime == nil)
@@ -424,11 +424,11 @@ struct TestViewModelTests {
         defer { try? FileManager.default.removeItem(at: outputDir) }
         let vm = makeVM(now: 200)
         vm.startPositioning()
-        _ = position(vm, cm: 35, seconds: 1.2)
-        #expect(vm.positioning == .ready(35))
+        _ = position(vm, cm: 28, seconds: 1.2)
+        #expect(vm.positioning == .ready(28))
         vm.start()
         #expect(vm.phase == .starting)
-        provider.emit(Fixture.tracked(at: 200, distance: 0.35))
+        provider.emit(Fixture.tracked(at: 200, distance: 0.28))
         #expect(vm.phase == .recording)
         provider.emit(Fixture.tracked(at: 200.5, distance: 0.42))   // drifts out: recorded, not stopped
         #expect(vm.phase == .recording)
@@ -436,7 +436,7 @@ struct TestViewModelTests {
         #expect(provider.startCount == 1)          // no second session
         let meta = try exportedMetadata()
         #expect(meta.faceDistance?.check == .passed)
-        #expect(meta.faceDistance?.atStartCm.map { ($0 * 10).rounded() / 10 } == 35)
+        #expect(meta.faceDistance?.atStartCm.map { ($0 * 10).rounded() / 10 } == 28)
         #expect(meta.faceDistance?.fractionOutsideRange == 0.5)
     }
 
@@ -465,7 +465,7 @@ struct TestViewModelTests {
 
     @Test func completedRecordingsGetSequentialDescriptiveNames() throws {
         defer { try? FileManager.default.removeItem(at: outputDir) }
-        experiment.defaults.set("p02", forKey: ExperimentLog.idKey)
+        experiment.defaults.set(TestType.pilot02.code, forKey: ExperimentLog.testTypeKey)
         for _ in 0..<2 {
             let vm = makeVM(uploader: nil)
             recordAndFinish(vm)
@@ -482,7 +482,7 @@ struct TestViewModelTests {
 
     @Test func failedUploadDoesNotReuseTheTrialNumber() async throws {
         defer { try? FileManager.default.removeItem(at: outputDir) }
-        experiment.defaults.set("P02", forKey: ExperimentLog.idKey)
+        experiment.defaults.set(TestType.pilot02.code, forKey: ExperimentLog.testTypeKey)
         let first = makeVM(uploader: FakeUploader(failuresBeforeSuccess: 5))
         recordAndFinish(first)
         await first.uploadTask?.value
@@ -501,8 +501,37 @@ struct TestViewModelTests {
         #expect(vm.canRetryExport)
         try FileManager.default.removeItem(at: outputDir)
         vm.retryExport()
-        #expect(exportedSessions().map { String($0.lastPathComponent.prefix(8)) } == ["EXP_T001"])
-        #expect(experiment.nextTrialNumber(for: "EXP") == 2)
+        #expect(exportedSessions().map { String($0.lastPathComponent.prefix(8)) } == ["DEV_T001"])
+        #expect(experiment.nextTrialNumber == 2)
+    }
+
+    @Test func abandonedFailedExportDoesNotUseANumber() throws {
+        try Data().write(to: outputDir)                 // export will fail
+        let failed = makeVM(uploader: nil)
+        recordAndFinish(failed)
+        #expect(failed.canRetryExport)
+        #expect(experiment.nextTrialNumber == 1)        // nothing was saved under T001
+        try FileManager.default.removeItem(at: outputDir)
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        let next = makeVM(uploader: nil)
+        recordAndFinish(next)
+        #expect(exportedSessions().map { String($0.lastPathComponent.prefix(8)) } == ["DEV_T001"])
+    }
+
+    @Test func switchingTestTypesContinuesOneSequenceWithoutForcingTheMode() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        experiment.defaults.set(TestType.direction.code, forKey: ExperimentLog.testTypeKey)
+        recordAndFinish(makeVM(uploader: nil))
+        experiment.defaults.set(TestType.fixationControl.code, forKey: ExperimentLog.testTypeKey)
+        let fixVM = TestViewModel(provider: provider,
+                                  stimulus: StimulusEngine(config: StimulusConfig(mode: .fixationStillStripes)),
+                                  duration: 1000, outputDirectory: outputDir, uploader: { nil },
+                                  experiment: experiment, now: { 100 })
+        fixVM.updateViewport(width: 844, height: 390)
+        recordAndFinish(fixVM)
+        let names = exportedSessions().map(\.lastPathComponent).sorted()
+        #expect(names.map { String($0.prefix(13)) }.sorted() == ["DIR_T001_OKN_", "FIX_T002_FIXS"])
+        #expect(experiment.nextTrialNumber == 3)
     }
 
     @Test func cancelledOrEmptyRecordingsDoNotUseANumber() {
@@ -514,7 +543,7 @@ struct TestViewModelTests {
         empty.start()
         provider.emit(Fixture.tracked(at: 99))      // dropped → zero samples
         empty.finish()
-        #expect(experiment.nextTrialNumber(for: "EXP") == 1)
+        #expect(experiment.nextTrialNumber == 1)
     }
 
     @Test func leftwardDirectionIsSavedAndNamed() throws {
@@ -547,7 +576,7 @@ final class FakeUploader: RecordingUploading {
             && FileManager.default.fileExists(atPath: files.metadata.path)
         if failuresLeft > 0 {
             failuresLeft -= 1
-            throw UploadError.unreachable("simulated")
+            throw UploadError.network("simulated")
         }
     }
 }

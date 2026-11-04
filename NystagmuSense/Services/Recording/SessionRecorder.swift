@@ -143,6 +143,7 @@ struct SessionRecorder {
             stimulusViewport: viewport,
             fixationDot: viewport.flatMap { FixationDot(stimulus: stimulus, viewport: $0) },
             experimentID: name?.experimentID,
+            testTypeName: name.flatMap { TestType(rawValue: $0.experimentID)?.displayName },
             trialNumber: name?.trialNumber,
             recordingName: recordingStem,
             faceDistance: FaceDistanceSummary(

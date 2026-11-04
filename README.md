@@ -73,18 +73,19 @@ In-app OKN detection and contrast-sensitivity measurement remain future work.
 ## Experiment workflow
 
 1. On the Mac, start the receiver (see [Automatic Wi-Fi Recording Transfer](#automatic-wi-fi-recording-transfer)).
-2. On the menu, enter the **Experiment** ID once (for example `P02`). It is kept
-   across app restarts. The line below the field shows the next name, e.g.
-   `P02_T004`.
+2. On the menu, pick the **Test Type** (default *General Test*). The app
+   remembers it across launches, and the line below it shows the next name,
+   e.g. `DIR_T004`. Test type only labels the recording; it doesn't change the
+   stimulus.
 3. Pick the **stripe direction**: `← Left` or `Right →`. Right is the default
    and the original stimulus. Direction applies to *OKN* and *Dot + Moving
    Stripes*. Still stripes are named `NONE`.
 4. Tap a trial button, rotate to landscape, and tap **Check Position**. The
    card shows face detection and an approximate distance:
-   - "No face detected", "Move closer (45 cm)" or "Move farther away (25 cm)";
-   - "Good positioning — 35 cm" once the distance is in range;
+   - "No face detected", "Move closer (35 cm)" or "Move farther away (20 cm)";
+   - "Good positioning — 28 cm" once the distance is in range;
    - **Start Trial** enables once the smoothed distance has stayed inside
-     **30–40 cm** for 1 s ("Ready to record").
+     **25–30 cm** for 1 s ("Ready to record").
 5. Tap **Start Trial**. The recording begins on the next tracked frame, using
    the same ARKit session. Moving out of range during the trial does **not**
    stop it; the deviation is saved in the sidecar.
@@ -97,36 +98,57 @@ the distance readout isn't working. The trial is recorded as
 **The distance is approximate.** It is ARKit's estimate of the distance from the
 front camera to the midpoint between the eyes, and it is uncalibrated. The camera
 sits at the screen edge, so this isn't the eye-to-screen-centre distance (about
-2 % less at 35 cm). The 30–40 cm range is a preliminary choice for experiments,
+3 % less at 28 cm). The 25–30 cm range is a preliminary choice for experiments,
 not a validated requirement.
 
 ### File names
 
 Every recording is named
-`{experiment}_T{trial}_{MODE}_{DIRECTION}_{yyyyMMdd_HHmmss}`, and the folder,
-CSV and JSON all share that name. For example:
+`{TEST}_T{trial}_{MODE}_{DIRECTION}_{yyyyMMdd_HHmmss}` (**file-name contract
+1**), and the folder, CSV and JSON all share that name. For example:
 
 ```
-P02_T001_OKN_RIGHT_20261104_143022.csv / .json
-P02_T002_FIXMOVE_LEFT_20261104_143105.csv / .json
-P02_T003_FIXSTILL_NONE_20261104_143145.csv / .json
+DEV_T001_OKN_RIGHT_20261104_143022.csv / .json
+DIR_T002_OKN_LEFT_20261104_143105.csv / .json
+FIX_T003_FIXSTILL_NONE_20261104_143145.csv / .json
+P02_T004_FIXMOVE_RIGHT_20261104_143220.csv / .json
 ```
+
+| Test Type (menu) | Code | Purpose |
+|---|---|---|
+| General Test (default) | `DEV` | General debugging and quick experiments |
+| Gaze Validation | `GAZE` | Verify eye-angle tracking |
+| Blink Test | `BLINK` | Test blink masking and artifacts |
+| OKN Detection | `OKNTEST` | Test OKN fast/slow phases |
+| Direction Test | `DIR` | Compare leftward and rightward motion |
+| Fixation Control | `FIX` | Test fixation without OKN |
+| Distance Test | `DIST` | Validate pre-trial distance measurement |
+| Pilot 02 | `P02` | Formal next pilot recordings |
 
 - **Timestamp:** the recording start in **UTC**, the same instant as
   `startedAt` in the JSON.
-- **Experiment ID:** letters, digits and `-` only, in upper case; blank becomes
-  `EXP`.
-- **Trial counter:** one per experiment, stored on the phone. It survives app
-  restarts but not deleting the app. A number is taken when a recording
-  *finishes*, so it is never reused, even if export or upload then fails. Retry
-  Export keeps the same name. Cancelled or empty recordings don't use a number.
-- **Older recordings** keep their `NS_<date>_<id>_<mode>` names, and every
-  script still reads them.
+- **Trial counter:** one sequence shared by all test types on the phone, so the
+  numbers follow recording order. It survives app restarts but not deleting
+  the app. The counter moves forward only when a recording is **saved
+  locally**; a successful upload isn't needed, and a failed upload never frees
+  a number. Retry Export keeps the same name. Cancelled, empty and never-saved
+  recordings don't use a number.
+- **One contract on both sides.** `RecordingName` in Swift and `STEM_RE` in
+  `scripts/receive_recordings.py` are both tested against
+  `scripts/tests/fixtures/recording_names.json`. The receiver's `/health`
+  reports `name_contract`, and **Test Connection** warns if the running
+  receiver is older than the app. When changing the format, update all three
+  places and bump the contract number.
+- **Older recordings** keep their names (`NS_<date>_<id>_<mode>`, and schema 4
+  `EXP_T…`). The receiver and every script still accept them.
 
-The schema 4 sidecar adds:
-- `experimentID`, `trialNumber`, `recordingName`;
-- `faceDistance`: `check`, `atStartCm`, `medianCm`, `minCm`, `maxCm`,
-  `fractionOutsideRange`, and the definition above.
+The sidecar (schema 5) adds:
+- `experimentID` (the test-type code), `testTypeName`, `trialNumber`,
+  `recordingName`;
+- `faceDistance`: `check`, `recommendedRangeCm`, `atStartCm`, `medianCm`,
+  `minCm`, `maxCm`, `fractionOutsideRange`, and the definition above.
+
+`stimulus.trialMode` and `stimulus.direction` stay separate fields.
 
 `sessionID` stays the unique recording ID, and the CSV columns are unchanged.
 
@@ -135,7 +157,7 @@ The schema 4 sidecar adds:
 Neither distance nor direction can be tested in the Simulator.
 1. **Distance:**
    - Hold a ruler from the eyes (bridge of the nose) to the front camera at
-     about **25, 35 and 45 cm**.
+     about **20, 28 and 35 cm**.
    - Note the cm shown at each distance, and whether "Move farther away",
      "Good positioning / Ready" and "Move closer" appear as expected.
    - Expect a few cm of error. Treat the readout as **uncalibrated** until it

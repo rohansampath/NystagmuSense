@@ -11,11 +11,14 @@ layout the app uses on the phone). Standard library only.
 Without --lan the server only listens on this Mac (127.0.0.1).
 
 Endpoints (both require the X-Upload-Token header):
-    GET  /health   -> 200 {"status": "ok"}
+    GET  /health   -> 200 {"status": "ok", "name_contract": 1}
     POST /upload   body {"stem": "...", "csv": "...", "json": "..."}
                    -> 201 saved, 200 identical recording already received,
                       400 malformed, 401 bad token, 409 different recording
                       with the same name exists, 413 too large
+Errors are {"error": "<message>", "code": "<invalid_name | malformed |
+unauthorized | conflict | too_large | write_failed | ...>"}; the app uses the
+code to tell the user what went wrong.
 
 This is a local research tool, not a production web service.
 """
@@ -37,19 +40,24 @@ DEFAULT_PORT = 8765
 DEFAULT_TRIALS_DIR = Path(__file__).resolve().parents[1] / "trials"
 # A 10 s recording is ~100 KB; this leaves plenty of room for longer sessions.
 MAX_BODY_BYTES = 10 * 1024 * 1024
-# RecordingName (schema 4+): {experiment}_T{###}_{MODE}_{DIRECTION}_{UTC yyyyMMdd_HHmmss},
-# e.g. P02_T001_OKN_RIGHT_20261104_143022; or the legacy SessionRecorder.fileStem
-# NS_<yyyyMMdd-HHmmss>_<8 hex>[_<mode>].
+# File-name contract 1, shared with RecordingName in ExperimentNaming.swift and
+# checked on both sides against tests/fixtures/recording_names.json:
+#   {TEST}_T{###}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}
+#   e.g. DIR_T001_OKN_RIGHT_20261104_143022 (TEST: A-Z, 0-9, '-', 1-16 chars);
+# or the legacy SessionRecorder.fileStem NS_<yyyyMMdd-HHmmss>_<8 hex>[_<mode>].
+NAME_CONTRACT = 1
 STEM_RE = re.compile(
     r"[A-Z0-9-]{1,16}_T\d{3,}_(?:OKN|FIXMOVE|FIXSTILL)_(?:RIGHT|LEFT|NONE)_\d{8}_\d{6}"
     r"|NS_\d{8}-\d{6}_[0-9A-Fa-f]{8}(?:_[a-z]+)?")
 
 
 class UploadError(Exception):
-    def __init__(self, status, message):
+    def __init__(self, status, message, code="malformed", detail=""):
         super().__init__(message)
         self.status = status
         self.message = message
+        self.code = code
+        self.detail = detail      # for the Mac's log only
 
 
 def parse_recording(body):
@@ -64,7 +72,7 @@ def parse_recording(body):
     if not all(isinstance(v, str) for v in (stem, csv_text, json_text)):
         raise UploadError(400, "expected string fields: stem, csv, json")
     if not STEM_RE.fullmatch(stem):
-        raise UploadError(400, "invalid recording name")
+        raise UploadError(400, "invalid recording name", "invalid_name", detail=repr(stem[:80]))
     # The app ends every CSV with a newline, so a missing one means truncation.
     if not csv_text.startswith("t_s,") or not csv_text.endswith("\n") or csv_text.count("\n") < 2:
         raise UploadError(400, "csv is empty, incomplete or not a NystagmuSense export")
@@ -92,7 +100,7 @@ def save_recording(trials_dir, stem, csv_text, json_text):
                    for name, text in files.items())
         if same:
             return False, final
-        raise UploadError(409, "a different recording with this name already exists")
+        raise UploadError(409, "a different recording with this name already exists", "conflict", detail=stem)
 
     # Stage in a hidden folder, then rename: both files appear together.
     staging = Path(tempfile.mkdtemp(prefix=".incoming-", dir=trials_dir))
@@ -116,40 +124,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path != "/health":
-            return self.reply(404, {"error": "not found"})
+            return self.reply(404, {"error": "not found", "code": "not_found"})
         if not self.authorized():
-            return self.reply(401, {"error": "invalid upload token"})
-        self.reply(200, {"status": "ok"})
+            return self.reply(401, {"error": "invalid upload token", "code": "unauthorized"})
+        self.reply(200, {"status": "ok", "name_contract": NAME_CONTRACT})
 
     def do_POST(self):
         if self.path != "/upload":
-            return self.reply(404, {"error": "not found"})
+            return self.reply(404, {"error": "not found", "code": "not_found"})
         if not self.authorized():
-            return self.reply(401, {"error": "invalid upload token"})
+            self.log_message("rejected upload: invalid token")
+            return self.reply(401, {"error": "invalid upload token", "code": "unauthorized"})
         try:
             length = int(self.headers.get("Content-Length", ""))
         except ValueError:
-            return self.reply(411, {"error": "Content-Length required"})
+            return self.reply(411, {"error": "Content-Length required", "code": "malformed"})
         if length <= 0:
-            return self.reply(400, {"error": "empty upload"})
+            return self.reply(400, {"error": "empty upload", "code": "malformed"})
         if length > MAX_BODY_BYTES:
-            return self.reply(413, {"error": f"upload larger than {MAX_BODY_BYTES} bytes"})
+            return self.reply(413, {"error": f"upload larger than {MAX_BODY_BYTES} bytes", "code": "too_large"})
         try:
             body = self.rfile.read(length)
         except OSError:
             self.close_connection = True
             return
         if len(body) != length:
-            return self.reply(400, {"error": "upload was cut off"})
+            return self.reply(400, {"error": "upload was cut off", "code": "malformed"})
 
         try:
             stem, csv_text, json_text = parse_recording(body)
             created, folder = save_recording(self.server.trials_dir, stem, csv_text, json_text)
         except UploadError as e:
-            return self.reply(e.status, {"error": e.message})
+            self.log_message("rejected upload (%s): %s %s", e.code, e.message, e.detail)
+            return self.reply(e.status, {"error": e.message, "code": e.code})
         except OSError as e:
             self.log_message("could not write recording: %s", e)
-            return self.reply(500, {"error": "could not write files on the Mac"})
+            return self.reply(500, {"error": "could not write files on the Mac", "code": "write_failed"})
 
         if created:
             self.log_message("saved %s", folder)
@@ -201,6 +211,7 @@ def main(argv=None):
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     server = make_server(host, args.port, token, args.trials_dir)
     print(f"Saving recordings to {args.trials_dir.resolve()}")
+    print(f"File-name contract {NAME_CONTRACT}: TEST_T###_MODE_DIRECTION_yyyyMMdd_HHmmss (and legacy NS_…)")
     if args.lan:
         print(f"Listening on the local network, port {args.port}. On the iPhone, enter")
         print(f"  http://<this Mac's IP>:{args.port}   (find the IP with: ipconfig getifaddr en0)")

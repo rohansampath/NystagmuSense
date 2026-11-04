@@ -163,7 +163,7 @@ after that (landscape gate, first-tracked-frame start, recording, export) is sha
   the eye transforms (relative to the face). `ARKitGazeProvider` attaches it to each
   `EyeMovementSample`. The CSV doesn't change; `FaceDistanceSummary` goes into the sidecar.
 - `.positioning` phase: the same provider runs, and `DistanceGate` (moving average with
-  weight 0.2; range 30–40 cm; 1 s hold) enables `start()`. Bypassing is recorded as
+  weight 0.2; range 25–30 cm; 1 s hold) enables `start()`. Bypassing is recorded as
   `bypassed`. Calling `start()` from `.idle` skips positioning (`notPerformed`).
 - Direction is the existing `StimulusConfig.direction` (since schema 1), now selectable;
   `StimulusConfig(mode:direction:)`. Speed magnitude is unchanged, and still mode ignores it.

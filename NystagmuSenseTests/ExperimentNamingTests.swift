@@ -50,32 +50,103 @@ struct ExperimentNamingTests {
         #expect(RecordingName.trialLabel(1234) == "T1234")
     }
 
-    @Test(arguments: [("p02", "P02"), ("  P_02 ", "P02"), ("", "EXP"), ("___", "EXP"),
-                      ("pilot-3", "PILOT-3"), ("ABCDEFGHIJKLMNOPQRS", "ABCDEFGHIJKLMNOP")])
-    func experimentIDIsSanitised(_ raw: String, _ expected: String) {
-        #expect(ExperimentLog.sanitized(raw) == expected)
+    // MARK: - Shared contract with the receiver
+
+    struct NameFixture: Decodable {
+        struct Case: Decodable {
+            let testType: String
+            let trial: Int
+            let mode: String
+            let direction: String
+            let startedAt: Date
+            let name: String
+        }
+        let contract_version: Int
+        let generated: [Case]
+        let legacy_valid: [String]
+        let invalid: [String]
+    }
+
+    /// scripts/tests/fixtures/recording_names.json, also validated by the Python receiver tests.
+    func sharedFixture() throws -> NameFixture {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("scripts/tests/fixtures/recording_names.json")
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return try d.decode(NameFixture.self, from: Data(contentsOf: url))
+    }
+
+    @Test func appGeneratesExactlyTheSharedFixtureNames() throws {
+        let fixture = try sharedFixture()
+        #expect(fixture.contract_version == RecordingName.contractVersion)
+        for c in fixture.generated {
+            let mode = try #require(StimulusConfig.TrialMode(rawValue: c.mode))
+            let direction = try #require(StimulusConfig.Direction(rawValue: c.direction))
+            let type = try #require(TestType(rawValue: c.testType), "unknown test type \(c.testType)")
+            let name = RecordingName(experimentID: type.code, trialNumber: c.trial,
+                                     stimulus: StimulusConfig(mode: mode, direction: direction), startedAt: c.startedAt)
+            #expect(name.stem == c.name)
+        }
+        // Every selectable test type is covered, so the receiver is tested with it.
+        #expect(Set(fixture.generated.map(\.testType)) == Set(TestType.allCases.map(\.code)))
+    }
+
+    @Test func noGeneratedNameLooksLikeAnInvalidFixtureName() throws {
+        let fixture = try sharedFixture()
+        let generated = Set(fixture.generated.map(\.name))
+        #expect(generated.isDisjoint(with: fixture.invalid))
+        #expect(generated.allSatisfy { !$0.contains("/") && !$0.contains(".") && $0.allSatisfy(\.isASCII) })
+    }
+
+    // MARK: - Test types
+
+    @Test func testTypeCodesAndNames() {
+        let expected: [(TestType, String, String)] = [
+            (.general, "DEV", "General Test"), (.gazeValidation, "GAZE", "Gaze Validation"),
+            (.blink, "BLINK", "Blink Test"), (.oknDetection, "OKNTEST", "OKN Detection"),
+            (.direction, "DIR", "Direction Test"), (.fixationControl, "FIX", "Fixation Control"),
+            (.distance, "DIST", "Distance Test"), (.pilot02, "P02", "Pilot 02"),
+        ]
+        #expect(TestType.allCases.count == expected.count)
+        for (type, code, name) in expected {
+            #expect(type.code == code && type.displayName == name)
+        }
+    }
+
+    @Test func testTypeDefaultsToGeneralAndPersists() throws {
+        let defaults = try freshDefaults()
+        #expect(ExperimentLog(defaults: defaults).testType == .general)
+        defaults.set(TestType.direction.code, forKey: ExperimentLog.testTypeKey)
+        #expect(ExperimentLog(defaults: defaults).testType == .direction)   // after relaunch
+        defaults.set("NOPE", forKey: ExperimentLog.testTypeKey)
+        #expect(ExperimentLog(defaults: defaults).testType == .general)
     }
 
     // MARK: - Counter
 
-    @Test func trialNumbersAreSequentialPerExperiment() throws {
+    @Test func oneSequenceAcrossTestTypesAdvancedOnlyBySaves() throws {
         let log = ExperimentLog(defaults: try freshDefaults())
-        #expect(log.nextTrialNumber(for: "P02") == 1)
-        let reserved: [Int] = (0..<3).map { _ in log.reserveTrialNumber(for: "P02") }
-        #expect(reserved == [1, 2, 3])
-        #expect(log.reserveTrialNumber(for: "P03") == 1)
-        #expect(log.nextTrialNumber(for: "P02") == 4)
+        #expect(log.nextTrialNumber == 1)
+        #expect(log.nextTrialNumber == 1)           // reading doesn't consume
+        log.commitTrialNumber(1)
+        log.commitTrialNumber(2)
+        #expect(log.nextTrialNumber == 3)
+        log.commitTrialNumber(2)                     // a repeated commit (Retry Export) never moves it back
+        #expect(log.nextTrialNumber == 3)
     }
 
     @Test func numberingPersistsAcrossRestart() throws {
         let defaults = try freshDefaults()
-        defaults.set("p02", forKey: ExperimentLog.idKey)
-        _ = ExperimentLog(defaults: defaults).reserveTrialNumber(for: "P02")
-        _ = ExperimentLog(defaults: defaults).reserveTrialNumber(for: "P02")
+        ExperimentLog(defaults: defaults).commitTrialNumber(1)
+        ExperimentLog(defaults: defaults).commitTrialNumber(2)
         // A new instance on the same store = the app after relaunch.
-        let relaunched = ExperimentLog(defaults: defaults)
-        #expect(relaunched.experimentID == "P02")
-        #expect(relaunched.reserveTrialNumber(for: "P02") == 3)
+        #expect(ExperimentLog(defaults: defaults).nextTrialNumber == 3)
+    }
+
+    @Test func earlierPerExperimentCountersAreNeverUndercut() throws {
+        let defaults = try freshDefaults()
+        defaults.set(5, forKey: "experiment.nextTrial.EXP")    // written by the free-text version
+        #expect(ExperimentLog(defaults: defaults).nextTrialNumber == 5)
     }
 
     // MARK: - Export
@@ -85,7 +156,8 @@ struct ExperimentNamingTests {
                                 stimulus: StimulusEngine(config: StimulusConfig(mode: .okn, direction: .leftward)))
         r.record(Fixture.tracked(at: 100.0, distance: 0.35))
         r.record(Fixture.tracked(at: 100.1, distance: 0.36))
-        r.name = RecordingName(experimentID: "P02", trialNumber: 7, stimulus: r.stimulus.config, startedAt: start)
+        r.name = RecordingName(experimentID: TestType.pilot02.code, trialNumber: 7,
+                               stimulus: r.stimulus.config, startedAt: start)
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }
 
@@ -96,8 +168,9 @@ struct ExperimentNamingTests {
         #expect(files.metadata.lastPathComponent == stem + ".json")
 
         let meta = try decode(files.metadata)
-        #expect(meta.schemaVersion == 4)
+        #expect(meta.schemaVersion == 5)
         #expect(meta.experimentID == "P02")
+        #expect(meta.testTypeName == "Pilot 02")
         #expect(meta.trialNumber == 7)
         #expect(meta.recordingName == stem)
         #expect(meta.stimulus.direction == .leftward)
@@ -126,5 +199,28 @@ struct ExperimentNamingTests {
         #expect(meta.stimulus.trialMode == .fixationStillStripes)
         #expect(meta.experimentID == nil && meta.trialNumber == nil && meta.recordingName == nil)
         #expect(meta.faceDistance == nil)
+        #expect(meta.testTypeName == nil)
+    }
+
+    @Test func schema4SidecarWithFreeTextExperimentStillDecodes() throws {
+        let json = """
+        {"schemaVersion":4,"sessionID":"1A2F66B1-8A5C-4890-BBB5-7FBE6E263000","startedAt":"2026-11-04T14:30:22Z",
+         "device":{"model":"iPhone17,1","systemName":"iOS","systemVersion":"26.6.2","appVersion":"1.0"},
+         "plannedDurationSeconds":10,"recordedSpanSeconds":9.96,"sampleCount":599,"trackedSampleCount":599,
+         "droppedOutsideWindowCount":3,"droppedOutOfOrderCount":0,"observedSampleRateHz":60.01,
+         "stimulus":{"direction":"leftward","fadeHalfCycleSeconds":10,"pitchToWidthRatio":2.4,
+                     "speedPointsPerSecond":126,"stripeGray":0,"stripeWidthRatio":0.02,"trialMode":"okn"},
+         "issues":[],"gazeSource":"ARKit","columns":{},"timingNotes":"",
+         "experimentID":"EXP","trialNumber":1,"recordingName":"EXP_T001_OKN_LEFT_20261104_143022",
+         "faceDistance":{"check":"passed","recommendedRangeCm":[30,40],"atStartCm":35,"medianCm":35,
+                         "minCm":34,"maxCm":36,"samplesWithDistance":599,"sampleCount":599,
+                         "fractionOutsideRange":0,"definition":"x"}}
+        """
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        let meta = try d.decode(SessionMetadata.self, from: Data(json.utf8))
+        #expect(meta.experimentID == "EXP" && meta.testTypeName == nil)
+        #expect(meta.stimulus.direction == .leftward)
+        #expect(meta.faceDistance?.check == .passed)
     }
 }

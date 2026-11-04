@@ -9,7 +9,7 @@ import SwiftUI
 
 struct MenuView: View {
     @EnvironmentObject private var vm: MenuViewModel
-    @AppStorage(ExperimentLog.idKey) private var experimentID = ""
+    @AppStorage(ExperimentLog.testTypeKey) private var testTypeCode = TestType.general.code
 
     var body: some View {
         NavigationStack {
@@ -21,12 +21,11 @@ struct MenuView: View {
                     .buttonStyle(.borderedProminent)
                 VStack(spacing: 8) {
                     HStack {
-                        Text("Experiment")
-                        TextField("P02", text: $experimentID)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .frame(width: 90)
-                            .textFieldStyle(.roundedBorder)
+                        Text("Test Type")
+                        Picker("Test Type", selection: testType) {
+                            ForEach(TestType.allCases) { Text($0.displayName).tag($0) }
+                        }
+                        .pickerStyle(.menu)
                     }
                     Text("Next: \(nextTrialLabel)").font(.caption.monospaced()).foregroundStyle(.secondary)
                     Picker("Stripe direction", selection: $vm.direction) {
@@ -55,10 +54,14 @@ struct MenuView: View {
         }
     }
 
+    private var testType: Binding<TestType> {
+        Binding(get: { TestType(rawValue: testTypeCode) ?? .general },
+                set: { testTypeCode = $0.code })
+    }
+
     /// Re-read on every render, so it updates after each recording.
     private var nextTrialLabel: String {
         let log = ExperimentLog()
-        let id = ExperimentLog.sanitized(experimentID)
-        return "\(id)_\(RecordingName.trialLabel(log.nextTrialNumber(for: id)))"
+        return "\(log.testType.code)_\(RecordingName.trialLabel(log.nextTrialNumber))"
     }
 }

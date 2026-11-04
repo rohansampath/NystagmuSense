@@ -48,7 +48,7 @@ struct RecordingStatusCard: View {
                       systemImage: positioning.isReady ? "checkmark.circle.fill" : "ruler")
                     .font(.headline)
                     .foregroundStyle(positioning.isReady ? .green : positioning == .noFace ? .red : .orange)
-                Text("Hold the phone about 30–40 cm from your eyes (approximate ARKit camera-to-eye distance, uncalibrated).")
+                Text("Hold the phone about \(Int(DistanceGate.recommendedCm.lowerBound))–\(Int(DistanceGate.recommendedCm.upperBound)) cm from your eyes (approximate ARKit camera-to-eye distance, uncalibrated).")
                     .font(.caption)
                 HStack {
                     Button("Start Trial", action: onStart)

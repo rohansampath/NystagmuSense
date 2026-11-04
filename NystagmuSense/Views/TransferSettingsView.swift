@@ -53,8 +53,11 @@ struct TransferSettingsView: View {
         let uploader = RecordingUploader(settings: settings)
         Task {
             do {
-                try await uploader.checkHealth()
-                result = (true, "Connected. The Mac accepted the token.")
+                let health = try await uploader.checkHealth()
+                result = health.acceptsThisAppsNames
+                    ? (true, "Connected. The Mac accepted the token.")
+                    : (false, "Connected, but this receiver is older than the app and will reject its file names. "
+                        + "Start scripts/receive_recordings.py from the same branch as the app.")
             } catch {
                 result = (false, error.localizedDescription)
             }

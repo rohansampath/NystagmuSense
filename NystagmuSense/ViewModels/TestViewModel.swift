@@ -182,12 +182,11 @@ final class TestViewModel: ObservableObject {
             phase = .failed(RecordingError.noSamples.localizedDescription)
             return
         }
-        // A completed recording takes the next trial number now, before export,
-        // so the number is never reused even if export or upload fails.
+        // Named once; Retry Export reuses the name. The counter advances only
+        // when the files are saved locally (export), not on upload.
         if recorder?.name == nil, let startedAt = recorder?.startedAt {
-            let id = experiment.experimentID
-            recorder?.name = RecordingName(experimentID: id,
-                                           trialNumber: experiment.reserveTrialNumber(for: id),
+            recorder?.name = RecordingName(experimentID: experiment.testType.code,
+                                           trialNumber: experiment.nextTrialNumber,
                                            stimulus: stimulus.config, startedAt: startedAt)
         }
         if let recorder { export(recorder) }
@@ -266,6 +265,7 @@ final class TestViewModel: ObservableObject {
     private func export(_ recorder: SessionRecorder) {
         do {
             let files = try recorder.export(to: outputDirectory, device: DeviceInfo.current())
+            if let trial = recorder.name?.trialNumber { experiment.commitTrialNumber(trial) }
             canRetryExport = false
             phase = .finished(RecordingSummary(files: files,
                                                sampleCount: recorder.samples.count,

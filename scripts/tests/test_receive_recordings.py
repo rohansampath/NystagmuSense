@@ -68,7 +68,8 @@ class ServerTestCase(unittest.TestCase):
 
 class ReceiverTests(ServerTestCase):
     def test_health(self):
-        self.assertEqual(self.request("GET", "/health"), (200, {"status": "ok"}))
+        self.assertEqual(self.request("GET", "/health"),
+                         (200, {"status": "ok", "name_contract": receive_recordings.NAME_CONTRACT}))
 
     def test_health_rejects_wrong_token(self):
         status, _ = self.request("GET", "/health", token="wrong")
@@ -178,6 +179,51 @@ class DescriptiveNameTests(ServerTestCase):
                      "P02_T001_OKN_RIGHT_20261104"):
             self.assertEqual(self.upload(stem=stem)[0], 400, stem)
         self.assertEqual(self.saved_folders(), [])
+
+
+FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "recording_names.json").read_text())
+
+
+class SharedNameContractTests(ServerTestCase):
+    """Names from tests/fixtures/recording_names.json, the same file the Swift
+    tests check RecordingName against, so app and receiver can't drift apart."""
+
+    def test_contract_versions_match(self):
+        self.assertEqual(FIXTURE["contract_version"], receive_recordings.NAME_CONTRACT)
+
+    def test_every_app_generated_name_is_accepted_in_sequence(self):
+        for case in FIXTURE["generated"]:          # sequential trials, every mode/direction/test type
+            status, data = self.upload(stem=case["name"])
+            self.assertEqual((status, data.get("status")), (201, "saved"), case["name"])
+        for case in FIXTURE["generated"]:
+            folder = self.trials / case["name"]
+            self.assertEqual(sorted(p.name for p in folder.iterdir()),
+                             [case["name"] + ".csv", case["name"] + ".json"])
+
+    def test_older_names_still_accepted(self):
+        for stem in FIXTURE["legacy_valid"]:
+            self.assertEqual(self.upload(stem=stem)[0], 201, stem)
+
+    def test_invalid_and_malicious_names_rejected_with_code(self):
+        for stem in FIXTURE["invalid"]:
+            status, data = self.upload(stem=stem)
+            self.assertEqual((status, data["code"]), (400, "invalid_name"), stem)
+        self.assertEqual(self.saved_folders(), [])
+
+    def test_retry_is_idempotent_and_conflict_never_overwrites(self):
+        name = FIXTURE["generated"][1]["name"]      # DIR_T002_OKN_LEFT_...
+        self.assertEqual(self.upload(stem=name)[0], 201)
+        self.assertEqual(self.upload(stem=name), (200, {"status": "already_received", "stem": name}))
+        status, data = self.upload(stem=name, meta=json.dumps({"schemaVersion": 5, "other": True}))
+        self.assertEqual((status, data["code"]), (409, "conflict"))
+        self.assertEqual((self.trials / name / f"{name}.json").read_text(), META)
+        self.assertEqual(self.saved_folders(), [name])
+
+    def test_error_codes_for_token_and_malformed_body(self):
+        status, data = self.upload(token="wrong")
+        self.assertEqual((status, data["code"]), (401, "unauthorized"))
+        status, data = self.request("POST", "/upload", b"not json")
+        self.assertEqual((status, data["code"]), (400, "malformed"))
 
 
 class ParseTests(unittest.TestCase):

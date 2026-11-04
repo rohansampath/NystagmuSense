@@ -71,57 +71,58 @@ struct FaceDistanceTests {
         var g = DistanceGate()
         #expect(g.status == .noFace)
         #expect(g.status.message == "No face detected")
-        feed(&g, cm: 25, seconds: 1)
-        #expect(g.status == .tooClose(25))
-        #expect(g.status.message == "Move farther away (25 cm)")
+        feed(&g, cm: 20, seconds: 1)
+        #expect(g.status == .tooClose(20))
+        #expect(g.status.message == "Move farther away (20 cm)")
         var far = DistanceGate()
-        feed(&far, cm: 45, seconds: 1)
-        #expect(far.status == .tooFar(45))
-        #expect(far.status.message == "Move closer (45 cm)")
+        feed(&far, cm: 35, seconds: 1)
+        #expect(far.status == .tooFar(35))
+        #expect(far.status.message == "Move closer (35 cm)")
+        #expect(DistanceGate.recommendedCm == 25...30)
     }
 
     @Test func readyOnlyAfterOneSecondInRange() {
         var g = DistanceGate()
-        let t = feed(&g, cm: 35, seconds: 0.9)
-        #expect(g.status == .holding(35))
-        #expect(g.status.message == "Good positioning — 35 cm")
+        let t = feed(&g, cm: 28, seconds: 0.9)
+        #expect(g.status == .holding(28))
+        #expect(g.status.message == "Good positioning — 28 cm")
         #expect(!g.status.isReady)
-        feed(&g, cm: 35, seconds: 0.2, from: t)
-        #expect(g.status == .ready(35))
-        #expect(g.status.message == "Ready to record — 35 cm")
+        feed(&g, cm: 28, seconds: 0.2, from: t)
+        #expect(g.status == .ready(28))
+        #expect(g.status.message == "Ready to record — 28 cm")
     }
 
     @Test func leavingRangeOrLosingTrackingRestartsTheHold() {
         var g = DistanceGate()
-        var t = feed(&g, cm: 35, seconds: 1.5)
+        var t = feed(&g, cm: 28, seconds: 1.5)
         #expect(g.status.isReady)
         t = feed(&g, cm: nil, seconds: 0.05, from: t)       // tracking lost
         #expect(g.status == .noFace)
-        t = feed(&g, cm: 35, seconds: 0.5, from: t)
+        t = feed(&g, cm: 28, seconds: 0.5, from: t)
         #expect(!g.status.isReady)
         t = feed(&g, cm: 50, seconds: 0.5, from: t)         // walks out of range
         #expect(g.status == .tooFar(50))
-        feed(&g, cm: 35, seconds: 0.8, from: t)
+        feed(&g, cm: 28, seconds: 0.8, from: t)
         #expect(!g.status.isReady)
     }
 
     @Test func smoothingDampsSingleFrameJitter() {
         var g = DistanceGate()
-        let t = feed(&g, cm: 35, seconds: 1.5)
-        g.update(distanceCm: 45, at: t)                     // one 10 cm outlier frame
+        let t = feed(&g, cm: 27, seconds: 1.5)
+        g.update(distanceCm: 37, at: t)                     // one 10 cm outlier frame
         #expect(g.status.isReady)
-        #expect(abs(g.smoothedCm! - 37) < 1e-9)            // moves 20 % of the way, stays in range
+        #expect(abs(g.smoothedCm! - 29) < 1e-9)            // moves 20 % of the way, stays in range
     }
 
     // MARK: - Summary
 
     @Test func summaryStatistics() throws {
-        let s = FaceDistanceSummary(distancesCm: [nil, 34, 36, 45, 30, nil], check: .passed)
+        let s = FaceDistanceSummary(distancesCm: [nil, 27, 29, 35, 25, nil], check: .passed)
         #expect(s.check == .passed)
-        #expect(s.recommendedRangeCm == [30, 40])
-        #expect(s.atStartCm == 34)
-        #expect(s.medianCm == 35)
-        #expect(s.minCm == 30 && s.maxCm == 45)
+        #expect(s.recommendedRangeCm == [25, 30])
+        #expect(s.atStartCm == 27)
+        #expect(s.medianCm == 28)
+        #expect(s.minCm == 25 && s.maxCm == 35)
         #expect(s.samplesWithDistance == 4 && s.sampleCount == 6)
         #expect(s.fractionOutsideRange == 0.25)
     }

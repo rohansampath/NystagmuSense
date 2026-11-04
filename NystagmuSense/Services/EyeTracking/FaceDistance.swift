@@ -29,9 +29,10 @@ enum FaceDistance {
 }
 
 /// Pre-trial check: the smoothed distance must stay in range for `holdSeconds`.
-/// Preliminary experimental range, not a clinically validated requirement.
+/// Preliminary experimental range, not a clinically validated requirement
+/// (25–30 cm after first device use; 30–40 cm felt too far for a phone).
 struct DistanceGate {
-    static let recommendedCm: ClosedRange<Double> = 30...40
+    static let recommendedCm: ClosedRange<Double> = 25...30
     static let holdSeconds: TimeInterval = 1
     /// Weight of each new frame in the moving average (~80 ms at 60 Hz), so
     /// the readout doesn't flicker.
