@@ -132,6 +132,72 @@ sidecar has none). Detection logic is the same for every mode.
 - open *Files › On My iPhone › NystagmuSense › Recordings/*, **or**
 - in Finder, select the iPhone › Files › NystagmuSense.
 
+## Automatic Wi-Fi Recording Transfer
+
+With a small receiver running on your Mac, each recording is uploaded
+automatically after it is saved on the phone, into
+`trials/NS_<date>_<id>_<mode>/` (the same CSV + JSON, byte-for-byte). The phone
+always keeps its own copy. No paid Apple Developer account, cloud service or
+extra dependencies; the receiver is Python standard library only.
+
+1. **Start the Mac server** (from the repository folder). Create a token once,
+   then start the receiver; `--lan` lets the iPhone reach it:
+
+   ```bash
+   openssl rand -hex 6 > ~/.nystagmusense_token     # once; stays outside the repo
+   NS_UPLOAD_TOKEN=$(cat ~/.nystagmusense_token) python3 scripts/receive_recordings.py --lan
+   ```
+
+   If macOS asks whether Python may accept incoming connections, choose **Allow**.
+   Without `--lan` it only listens on `127.0.0.1` (this Mac). `--port` changes the
+   default port 8765.
+
+2. **Find the Mac's IP address** (Wi-Fi is usually `en0`):
+
+   ```bash
+   ipconfig getifaddr en0
+   ```
+
+3. **Configure the iPhone.** Both devices must be on the same Wi-Fi. In the app,
+   tap **Mac Transfer** and enter:
+   - *Server*: `http://<that IP>:8765`, e.g. `http://192.168.1.20:8765`
+   - *Upload token*: the output of `cat ~/.nystagmusense_token`
+
+   Settings are stored only on the phone. Only local-network addresses
+   (`192.168.x.x`, `10.x.x.x`, `172.16–31.x.x`, `*.local`) are accepted.
+
+4. **Test the connection.** Tap **Test Connection**. The first time, iOS asks to
+   find devices on your local network; tap **Allow**, then test again.
+   "Connected" means the server is reachable *and* the token matches. From the Mac
+   you can check the server too:
+
+   ```bash
+   curl -H "X-Upload-Token: $(cat ~/.nystagmusense_token)" http://localhost:8765/health
+   ```
+
+5. **Record and verify.** Record a trial as usual. The result card shows
+   *Saved locally · Uploading to Mac…*, then **Uploaded to Mac** once the Mac has
+   written both files. The server prints `saved trials/NS_…`. Then:
+
+   ```bash
+   ls trials/
+   python3 scripts/plot_gaze.py trials/NS_<…>/NS_<…>.csv
+   ```
+
+   If no server is set up, the card says *Saved locally (Mac transfer not set up)*.
+
+   Received folders (`trials/NS_*/`) are git-ignored because this repository is
+   public; rename and add a trial on purpose if it should be shared.
+
+6. **Retry a failed upload.** If the card says **Upload failed: saved locally**,
+   fix the cause it shows (server not running, wrong IP or token, different Wi-Fi)
+   and tap **Retry Upload**. Re-sending a recording the Mac already has is
+   harmless; a *different* recording with the same name is refused, never
+   overwritten. Recordings stay in *Files › On My iPhone › NystagmuSense ›
+   Recordings*, and **Export** still works.
+
+7. **Stop the server.** Press **Ctrl+C** in its Terminal window.
+
 ## Plot
 
 ```bash

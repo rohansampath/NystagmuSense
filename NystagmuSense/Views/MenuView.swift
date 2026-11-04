@@ -24,10 +24,12 @@ struct MenuView: View {
                     Button("Control: Dot + Still Stripes")  { vm.startRecording(.fixationStillStripes) }
                 }
                 .buttonStyle(.bordered)
+                Button("Mac Transfer")  { vm.showTransfer = true }
                 Spacer()
             }
             .navigationDestination(isPresented: $vm.showHistory)   { HistoryView() }
             .navigationDestination(isPresented: $vm.showCountdown) { TestView(mode: vm.trialMode) }
+            .navigationDestination(isPresented: $vm.showTransfer)  { TransferSettingsView() }
         }
     }
 }

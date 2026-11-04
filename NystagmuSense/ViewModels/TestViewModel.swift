@@ -6,7 +6,8 @@
 //
 //  Lightweight session coordinator:
 //  start gaze provider → first tracked frame starts clock + stimulus → record for
-//  `duration` → stop → export CSV/JSON → report outcome.
+//  `duration` → stop → export CSV/JSON → report outcome → upload to the Mac
+//  (optional; see Services/Transfer). The local files are always kept.
 //
 //  OKN detection and scoring are intentionally NOT part of this path
 //  (see Services/Analysis and docs/ARCHITECTURE.md).
@@ -34,6 +35,14 @@ final class TestViewModel: ObservableObject {
         case cancelled
     }
 
+    /// Mac transfer of a saved recording. Only ever set after a local export succeeded.
+    enum UploadStatus: Equatable {
+        case notConfigured                  // saved locally; no Mac set up
+        case uploading
+        case uploaded                       // the Mac confirmed both files were written
+        case failed(String)                 // still saved locally; can retry
+    }
+
     @Published private(set) var phase: Phase = .idle
     /// Stimulus onset on the system-uptime clock; nil until the first tracked camera frame.
     @Published private(set) var stimulusStartTime: TimeInterval?
@@ -43,6 +52,10 @@ final class TestViewModel: ObservableObject {
     /// True after a failed export; samples stay in memory for `retryExport()`.
     @Published private(set) var canRetryExport = false
     @Published private(set) var viewport: StimulusViewport?
+    /// nil until a recording has been saved locally.
+    @Published private(set) var upload: UploadStatus?
+    /// The in-flight upload, exposed so tests can await it.
+    private(set) var uploadTask: Task<Void, Never>?
 
     var isLandscape: Bool { viewport?.isLandscape == true }
 
@@ -52,6 +65,7 @@ final class TestViewModel: ObservableObject {
     private let provider: GazeProvider
     private let startupTimeout: TimeInterval
     private let outputDirectory: URL
+    private let makeUploader: () -> RecordingUploading?
     private let now: () -> TimeInterval
     private var recorder: SessionRecorder?
     private var timer: Task<Void, Never>?
@@ -63,12 +77,14 @@ final class TestViewModel: ObservableObject {
          duration: TimeInterval = 10,
          startupTimeout: TimeInterval = 5,
          outputDirectory: URL = SessionRecorder.defaultDirectory,
+         uploader: @escaping () -> RecordingUploading? = RecordingUploader.fromSavedSettings,
          now: @escaping () -> TimeInterval = CACurrentMediaTime) {
         self.provider        = provider
         self.stimulus        = stimulus
         self.duration        = duration
         self.startupTimeout  = startupTimeout
         self.outputDirectory = outputDirectory
+        self.makeUploader    = uploader
         self.now             = now
     }
 
@@ -137,6 +153,12 @@ final class TestViewModel: ObservableObject {
         export(recorder)
     }
 
+    /// Re-sends a recording whose upload failed. The local files are unchanged.
+    func retryUpload() {
+        guard case .failed = upload, case .finished(let summary) = phase else { return }
+        startUpload(summary.files)
+    }
+
     /// Reacts to the app's scene phase.
     /// - While recording, any loss of the active state (Control Center, a call,
     ///   backgrounding) stops capture; data so far is saved and marked partial.
@@ -193,9 +215,25 @@ final class TestViewModel: ObservableObject {
                                                trackedCount: recorder.trackedCount,
                                                sampleRateHz: recorder.observedSampleRate,
                                                issues: recorder.issues))
+            startUpload(files)
         } catch {
             canRetryExport = true
             phase = .failed("Recording could not be saved: \(error.localizedDescription)")
+        }
+    }
+
+    /// Runs after capture has stopped and both files are on disk, so it can't
+    /// affect tracking or stimulus timing. Network I/O happens off the main actor.
+    private func startUpload(_ files: RecordingFiles) {
+        guard let uploader = makeUploader() else { upload = .notConfigured; return }
+        upload = .uploading
+        uploadTask = Task { [weak self] in
+            do {
+                try await uploader.upload(files)
+                self?.upload = .uploaded
+            } catch {
+                self?.upload = .failed(error.localizedDescription)
+            }
         }
     }
 

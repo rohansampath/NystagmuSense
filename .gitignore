@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 xcuserdata/
+
+# Recordings received from the phone (scripts/receive_recordings.py) stay local:
+# this repository is public. Rename and add a trial deliberately if it should be shared.
+trials/NS_*/

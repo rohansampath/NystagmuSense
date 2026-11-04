@@ -32,8 +32,10 @@ struct TestView: View {
                                     stimulus: vm.stimulus.config,
                                     canRetryExport: vm.canRetryExport,
                                     canTryAgain: vm.canTryAgain,
+                                    upload: vm.upload,
                                     onStart: vm.start,
                                     onRetryExport: vm.retryExport,
+                                    onRetryUpload: vm.retryUpload,
                                     onTryAgain: vm.tryAgain,
                                     onClose: close)
                     .padding()
