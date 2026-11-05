@@ -62,6 +62,20 @@ class Fixture(unittest.TestCase):
 
 
 class ManifestTests(Fixture):
+    def test_nonfinite_or_malformed_timestamps_are_technical_failures(self):
+        tid = write_recording(self.trials, "P01", 1, "OKN", "RIGHT")
+        folder = self.trials / tid
+        path = folder / f"{tid}.csv"
+        original = path.read_text()
+        for bad in ("nan", "inf", "bad"):
+            lines = original.splitlines()
+            fields = lines[1].split(",")
+            fields[0] = bad
+            lines[1] = ",".join(fields)
+            path.write_text("\n".join(lines) + "\n")
+            problems, _ = build_manifest.technical_check(folder)
+            self.assertTrue(problems, bad)
+
     def test_balanced_cohort_gives_28_development_and_12_evaluation(self):
         self.full_cohort()
         rows, _ = build_manifest.build(self.trials)

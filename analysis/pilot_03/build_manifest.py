@@ -26,6 +26,7 @@ Rules (documented in analysis/pilot_03/README.md):
 import argparse
 import csv
 import json
+import math
 import random
 import re
 import sys
@@ -63,8 +64,12 @@ def technical_check(folder):
         rows = list(csv.DictReader(open(folder / f"{name}.csv", newline="")))
     except (OSError, json.JSONDecodeError) as e:
         return [f"unreadable: {e}"], []
+    if not isinstance(meta, dict) or not isinstance(meta.get("stimulus"), dict):
+        return ["metadata and stimulus must be JSON objects"], []
     stim = meta.get("stimulus") or {}
     condition, direction = m[3], m[4]
+    if m[1] not in ("P01", "P02") or (direction == "NONE") != (condition == "FIXSTILL"):
+        problems.append("participant or condition/direction combination is not in the P03 protocol")
     expected = {"recordingName": name, "participantID": m[1], "trialNumber": int(m[2]), "directionCode": direction}
     for key, want in expected.items():
         if meta.get(key) != want:
@@ -75,14 +80,19 @@ def technical_check(folder):
         problems.append("stimulus.direction disagrees with name")
     if stim.get("fixedBackgroundGray") != 1:
         problems.append("background not fixed at 1 (not the P03 stimulus)")
-    if (stim.get("speedPointsPerSecond") == 0) != (condition == "FIXSTILL"):
+    speed = stim.get("speedPointsPerSecond")
+    if not isinstance(speed, (float, int)) or not math.isfinite(speed) or speed < 0 or \
+            (speed == 0) != (condition == "FIXSTILL"):
         problems.append("stripe speed doesn't match the condition")
     if len(rows) < MIN_SAMPLES:
         problems.append(f"only {len(rows)} samples")
-    t = [float(r["t_s"]) for r in rows]
-    if any(b <= a for a, b in zip(t, t[1:])):
-        problems.append("timestamps not increasing")
-    tracked = sum(r["tracked"] == "1" for r in rows) / max(len(rows), 1)
+    try:
+        t = [float(r["t_s"]) for r in rows]
+        tracked = sum(r["tracked"] == "1" for r in rows) / max(len(rows), 1)
+    except (KeyError, ValueError, TypeError):
+        return problems + ["missing or malformed timing/tracking columns"], notes
+    if any(not math.isfinite(x) for x in t) or any(b <= a for a, b in zip(t, t[1:])):
+        problems.append("timestamps not finite and strictly increasing")
     if tracked < MIN_TRACKED:
         problems.append(f"only {tracked:.0%} face-tracked")
     if meta.get("issues"):
