@@ -62,7 +62,10 @@ struct SessionMetadata: Codable, Equatable {
     ///    `{experiment}_{T###}_{MODE}_{DIR}_{UTC}`) and faceDistance.
     /// 5: experimentID is now a predefined test-type code (TestType); adds
     ///    testTypeName. Trial numbers are shared by all test types.
-    var schemaVersion = 5
+    /// 6: adds participantID (Pilot 03), which also follows the code in the
+    ///    stem's first field (`P03-P01_…`), and directionCode, the stem's
+    ///    direction field (NONE for still stripes).
+    var schemaVersion = 6
     let sessionID: UUID
     let startedAt: Date
     let device: DeviceInfo
@@ -82,7 +85,11 @@ struct SessionMetadata: Codable, Equatable {
     var experimentID: String? = nil
     /// Schema 5+: display name of the test type whose code is `experimentID`.
     var testTypeName: String? = nil
+    /// Schema 6+: pseudonymous participant code, nil when the test type has none.
+    var participantID: String? = nil
     var trialNumber: Int? = nil
+    /// Schema 6+: RIGHT / LEFT / NONE exactly as in recordingName.
+    var directionCode: String? = nil
     var recordingName: String? = nil
     var faceDistance: FaceDistanceSummary? = nil
     var gazeSource = "ARKit ARFaceTrackingConfiguration (TrueDepth)"
@@ -128,11 +135,15 @@ struct SessionMetadata: Codable, Equatable {
         "startedAt": "recording start, ISO 8601 UTC; also the timestamp in recordingName",
         "experimentID": "test-type code chosen on the menu, e.g. DIR (schema 5+); free-text experiment ID in schema 4",
         "testTypeName": "display name of that test type, e.g. Direction Test (schema 5+)",
+        "participantID": "pseudonymous participant code chosen before the trial, e.g. P01 (Pilot 03; "
+            + "schema 6+); absent for test types without participants",
+        "directionCode": "RIGHT, LEFT or NONE, the direction field of recordingName; NONE when the stripes "
+            + "don't move, whatever stimulus.direction says (schema 6+)",
         "trialNumber": "trial counter shared by all test types on this phone, advanced when a recording is "
             + "saved locally; never reused (schema 5+; per experiment ID in schema 4)",
         "recordingName": "stem shared by the folder, CSV and JSON: "
-            + "{experimentID}_T{trial:03}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss} "
-            + "(file-name contract 1); "
+            + "{experimentID}[-{participantID}]_T{trial:03}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_"
+            + "{UTC yyyyMMdd_HHmmss} (file-name contract 1); "
             + "legacy NS_ stem when no experiment name was assigned",
         "faceDistance": "approximate front-camera-to-eye-midpoint distance from ARKit, cm, uncalibrated; "
             + "check = passed / bypassed / notPerformed for the pre-trial positioning gate",

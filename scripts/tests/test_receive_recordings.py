@@ -16,6 +16,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import receive_recordings  # noqa: E402
 
 TOKEN = "test-token-123"
@@ -224,6 +225,68 @@ class SharedNameContractTests(ServerTestCase):
         self.assertEqual((status, data["code"]), (401, "unauthorized"))
         status, data = self.request("POST", "/upload", b"not json")
         self.assertEqual((status, data["code"]), (400, "malformed"))
+
+
+class Pilot03Tests(ServerTestCase):
+    """Participant-tagged names (P03-P01_...) and the metadata that must agree with them."""
+
+    def meta(self, name, **overrides):
+        fields = dict(schemaVersion=6, experimentID="P03", participantID=name[4:7], recordingName=name,
+                      directionCode=name.split("_")[3])
+        fields.update(overrides)
+        return json.dumps(fields)
+
+    def p03_cases(self):
+        return [c for c in FIXTURE["generated"] if c["testType"] == "P03"]
+
+    def test_all_five_pilot_03_combinations_arrive_as_matching_pairs(self):
+        cases = self.p03_cases()
+        self.assertEqual(len(cases), 5)
+        for case in cases:
+            name = case["name"]
+            self.assertEqual(self.upload(stem=name, meta=self.meta(name))[0], 201, name)
+            self.assertEqual(sorted(p.name for p in (self.trials / name).iterdir()), [name + ".csv", name + ".json"])
+            self.assertEqual(json.loads((self.trials / name / f"{name}.json").read_text())["participantID"],
+                             case["participant"])
+
+    def test_retry_of_a_pilot_03_trial_is_idempotent(self):
+        name = self.p03_cases()[0]["name"]
+        self.assertEqual(self.upload(stem=name, meta=self.meta(name))[0], 201)
+        self.assertEqual(self.upload(stem=name, meta=self.meta(name)), (200, {"status": "already_received", "stem": name}))
+        status, data = self.upload(stem=name, meta=self.meta(name, trialNumber=99))
+        self.assertEqual((status, data["code"]), (409, "conflict"))
+
+    def test_metadata_that_disagrees_with_the_name_is_refused(self):
+        name = self.p03_cases()[1]["name"]              # P03-P02_T042_OKN_LEFT_...
+        for meta in (self.meta(name, recordingName=name.replace("_LEFT_", "_RIGHT_")),
+                     self.meta(name, participantID="P01"),
+                     self.meta(name, experimentID="P02")):
+            status, data = self.upload(stem=name, meta=meta)
+            self.assertEqual((status, data["code"]), (400, "mismatched_metadata"), meta)
+        self.assertEqual(self.saved_folders(), [])
+
+    def test_received_pilot_03_recording_is_read_by_plotting_and_detection(self):
+        import contextlib
+        import io
+        import matplotlib
+        matplotlib.use("Agg")
+        import detect_okn
+        import plot_gaze
+        from test_detect_okn import okn_angle, synthetic_csv
+        name = self.p03_cases()[0]["name"]              # P03-P01_T041_OKN_RIGHT_...
+        meta = self.meta(name, stimulus={"trialMode": "okn", "direction": "rightward"})
+        self.assertEqual(self.upload(stem=name, csv=synthetic_csv(okn_angle), meta=meta)[0], 201)
+        csv_path = self.trials / name / f"{name}.csv"
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(plot_gaze.main([str(csv_path), "--out", str(self.trials / "plot.png")]), 0)
+        self.assertEqual(detect_okn.load_trial_mode(csv_path), "okn")
+        result = detect_okn.analyse(detect_okn.load_session(csv_path), detect_okn.Params())
+        self.assertGreater(len(result["fast"]), 0)
+
+    def test_schema_5_sidecars_with_their_own_name_are_still_accepted(self):
+        name = "DIR_T005_OKN_RIGHT_20261104_074541"
+        meta = json.dumps({"schemaVersion": 5, "experimentID": "DIR", "recordingName": name})
+        self.assertEqual(self.upload(stem=name, meta=meta)[0], 201)
 
 
 class ParseTests(unittest.TestCase):

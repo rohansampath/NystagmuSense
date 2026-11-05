@@ -10,6 +10,7 @@ import SwiftUI
 struct MenuView: View {
     @EnvironmentObject private var vm: MenuViewModel
     @AppStorage(ExperimentLog.testTypeKey) private var testTypeCode = TestType.general.code
+    @AppStorage(ExperimentLog.participantKey) private var participantCode = ""
 
     var body: some View {
         NavigationStack {
@@ -27,28 +28,44 @@ struct MenuView: View {
                         }
                         .pickerStyle(.menu)
                     }
-                    Text("Next: \(nextTrialLabel)").font(.caption.monospaced()).foregroundStyle(.secondary)
-                    Picker("Stripe direction", selection: $vm.direction) {
-                        Text("← Left").tag(StimulusConfig.Direction.leftward)
-                        Text("Right →").tag(StimulusConfig.Direction.rightward)
+                    if selection.testType.requiresParticipant {
+                        Picker("Participant", selection: participant) {
+                            ForEach(Participant.allCases) { Text($0.rawValue).tag(Optional($0)) }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                    Picker("Condition", selection: $vm.trialMode) {
+                        Text("OKN").tag(StimulusConfig.TrialMode.okn)
+                        Text("Dot + moving").tag(StimulusConfig.TrialMode.fixationMovingStripes)
+                        Text("Dot + still").tag(StimulusConfig.TrialMode.fixationStillStripes)
                     }
                     .pickerStyle(.segmented)
-                    .frame(width: 220)
-                    Text("Direction applies to moving stripes").font(.caption2).foregroundStyle(.secondary)
+                    .frame(width: 330)
+                    if vm.trialMode == .fixationStillStripes {
+                        Text("Direction: none (still stripes)").font(.subheadline).foregroundStyle(.secondary)
+                            .frame(height: 32)
+                    } else {
+                        Picker("Stripe direction", selection: $vm.direction) {
+                            Text("← Left").tag(StimulusConfig.Direction.leftward)
+                            Text("Right →").tag(StimulusConfig.Direction.rightward)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 220)
+                    }
+                    Text(selection.isComplete ? "Next: \(nextTrialLabel)" : "Choose the participant")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(selection.isComplete ? Color.secondary : Color.red)
                 }
-                Button("Record 10 Seconds")  { vm.startRecording(.okn) }
-                    .buttonStyle(.bordered)
-                VStack(spacing: 12) {
-                    Button("Control: Dot + Moving Stripes") { vm.startRecording(.fixationMovingStripes) }
-                    Button("Control: Dot + Still Stripes")  { vm.startRecording(.fixationStillStripes) }
-                }
-                .buttonStyle(.bordered)
+                Button("Record 10 Seconds")  { vm.startRecording() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!selection.isComplete)
                 Button("Mac Transfer")  { vm.showTransfer = true }
                 Spacer()
             }
             .navigationDestination(isPresented: $vm.showHistory)   { HistoryView() }
             .navigationDestination(isPresented: $vm.showCountdown) {
-                TestView(mode: vm.trialMode, direction: vm.direction)
+                TestView(mode: vm.trialMode, direction: vm.direction, selection: selection)
             }
             .navigationDestination(isPresented: $vm.showTransfer)  { TransferSettingsView() }
         }
@@ -59,9 +76,24 @@ struct MenuView: View {
                 set: { testTypeCode = $0.code })
     }
 
-    /// Re-read on every render, so it updates after each recording.
+    private var participant: Binding<Participant?> {
+        Binding(get: { Participant(rawValue: participantCode) },
+                set: { participantCode = $0?.rawValue ?? "" })
+    }
+
+    private var selection: TrialSelection {
+        TrialSelection(testType: TestType(rawValue: testTypeCode) ?? .general,
+                       participant: Participant(rawValue: participantCode))
+    }
+
+    /// The saved name without its timestamp. Re-read on every render, so it
+    /// updates after each recording.
     private var nextTrialLabel: String {
-        let log = ExperimentLog()
-        return "\(log.testType.code)_\(RecordingName.trialLabel(log.nextTrialNumber))"
+        let name = RecordingName(experimentID: selection.testType.code,
+                                 participantID: selection.participant?.rawValue,
+                                 trialNumber: ExperimentLog().nextTrialNumber,
+                                 stimulus: StimulusConfig(mode: vm.trialMode, direction: vm.direction),
+                                 startedAt: Date())
+        return "\(name.testField)_\(RecordingName.trialLabel(name.trialNumber))_\(name.mode.nameCode)_\(name.directionCode)"
     }
 }

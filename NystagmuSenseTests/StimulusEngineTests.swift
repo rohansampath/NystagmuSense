@@ -24,6 +24,16 @@ struct StimulusEngineTests {
         #expect(engine.snapshot(at: 15).shadePercent == 50)
     }
 
+    @Test func pilot03BackgroundStaysWhiteForTheWholeTrial() {
+        var config = StimulusConfig(mode: .okn, direction: .leftward)
+        config.fixedBackgroundGray = TestType.pilot03.fixedBackgroundGray
+        let engine = StimulusEngine(config: config)
+        for t in stride(from: 0.0, through: 12.0, by: 0.5) {
+            #expect(engine.backgroundGray(at: t) == 1)
+        }
+        #expect(engine.config.stripeGray == 0)              // black bars: full contrast throughout
+    }
+
     @Test func defaultBlackBarsFadeIntoBackgroundWithinTenSeconds() {
         #expect(engine.config.stripeGray == 0)
         #expect(engine.config.fixedBackgroundGray == nil)

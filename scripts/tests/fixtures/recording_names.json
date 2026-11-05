@@ -1,6 +1,6 @@
 {
   "contract_version": 1,
-  "contract": "{TEST}_T{trial, zero-padded to 3+ digits}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}; TEST = upper-case letters, digits or '-', 1-16 characters (the app writes predefined test-type codes). Legacy: NS_{yyyyMMdd-HHmmss}_{8 hex}[_{lower-case mode}]. CSV and JSON share the name; only the extension differs.",
+  "contract": "{TEST}_T{trial, zero-padded to 3+ digits}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}; TEST = upper-case letters, digits or '-', 1-16 characters (the app writes a predefined test-type code, followed by -{participant} when the trial has one, e.g. P03-P01). Legacy: NS_{yyyyMMdd-HHmmss}_{8 hex}[_{lower-case mode}]. CSV and JSON share the name; only the extension differs.",
   "generated": [
     {"testType": "DIR",     "trial": 1,    "mode": "okn",                   "direction": "rightward", "startedAt": "2026-11-04T14:30:22Z", "name": "DIR_T001_OKN_RIGHT_20261104_143022"},
     {"testType": "DIR",     "trial": 2,    "mode": "okn",                   "direction": "leftward",  "startedAt": "2026-11-04T14:31:05Z", "name": "DIR_T002_OKN_LEFT_20261104_143105"},
@@ -12,7 +12,12 @@
     {"testType": "BLINK",   "trial": 8,    "mode": "fixationStillStripes",  "direction": "rightward", "startedAt": "2026-11-04T14:34:30Z", "name": "BLINK_T008_FIXSTILL_NONE_20261104_143430"},
     {"testType": "OKNTEST", "trial": 9,    "mode": "okn",                   "direction": "leftward",  "startedAt": "2026-11-04T14:35:09Z", "name": "OKNTEST_T009_OKN_LEFT_20261104_143509"},
     {"testType": "DIST",    "trial": 10,   "mode": "fixationMovingStripes", "direction": "rightward", "startedAt": "2026-11-04T14:35:50Z", "name": "DIST_T010_FIXMOVE_RIGHT_20261104_143550"},
-    {"testType": "P02",     "trial": 1000, "mode": "okn",                   "direction": "rightward", "startedAt": "2026-12-31T23:59:59Z", "name": "P02_T1000_OKN_RIGHT_20261231_235959"}
+    {"testType": "P02",     "trial": 1000, "mode": "okn",                   "direction": "rightward", "startedAt": "2026-12-31T23:59:59Z", "name": "P02_T1000_OKN_RIGHT_20261231_235959"},
+    {"testType": "P03", "participant": "P01", "trial": 41, "mode": "okn",                   "direction": "rightward", "startedAt": "2026-11-06T15:00:00Z", "name": "P03-P01_T041_OKN_RIGHT_20261106_150000"},
+    {"testType": "P03", "participant": "P02", "trial": 42, "mode": "okn",                   "direction": "leftward",  "startedAt": "2026-11-06T15:00:30Z", "name": "P03-P02_T042_OKN_LEFT_20261106_150030"},
+    {"testType": "P03", "participant": "P01", "trial": 43, "mode": "fixationMovingStripes", "direction": "rightward", "startedAt": "2026-11-06T15:01:00Z", "name": "P03-P01_T043_FIXMOVE_RIGHT_20261106_150100"},
+    {"testType": "P03", "participant": "P02", "trial": 44, "mode": "fixationMovingStripes", "direction": "leftward",  "startedAt": "2026-11-06T15:01:30Z", "name": "P03-P02_T044_FIXMOVE_LEFT_20261106_150130"},
+    {"testType": "P03", "participant": "P01", "trial": 45, "mode": "fixationStillStripes",  "direction": "leftward",  "startedAt": "2026-11-06T15:02:00Z", "name": "P03-P01_T045_FIXSTILL_NONE_20261106_150200"}
   ],
   "legacy_valid": [
     "NS_20261024-101500_ABCD1234",
@@ -38,6 +43,9 @@
     "DIR_T001_OKN_RIGHT_20261104_143022/../../etc",
     "/etc/passwd",
     "trial_001",
-    "NS_20261104-001330_EDD9E3AB_fixstill.json"
+    "NS_20261104-001330_EDD9E3AB_fixstill.json",
+    "P03_P01_OKN_RIGHT_T001_20261106_150000",
+    "P03-p01_T041_OKN_RIGHT_20261106_150000",
+    "P03-ASHWIN-AGGARWAL_T041_OKN_RIGHT_20261106_150000"
   ]
 }

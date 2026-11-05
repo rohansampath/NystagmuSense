@@ -12,9 +12,12 @@ struct TestView: View {
     @EnvironmentObject private var menu: MenuViewModel
     @Environment(\.scenePhase) private var scenePhase
 
-    init(mode: StimulusConfig.TrialMode = .okn, direction: StimulusConfig.Direction = .rightward) {
+    init(mode: StimulusConfig.TrialMode = .okn, direction: StimulusConfig.Direction = .rightward,
+         selection: TrialSelection = ExperimentLog().selection) {
+        var config = StimulusConfig(mode: mode, direction: direction)
+        config.fixedBackgroundGray = selection.testType.fixedBackgroundGray
         _vm = StateObject(wrappedValue:
-            TestViewModel(stimulus: StimulusEngine(config: StimulusConfig(mode: mode, direction: direction))))
+            TestViewModel(stimulus: StimulusEngine(config: config), selection: selection))
     }
 
     var body: some View {

@@ -77,10 +77,15 @@ In-app OKN detection and contrast-sensitivity measurement remain future work.
    remembers it across launches, and the line below it shows the next name,
    e.g. `DIR_T004`. Test type only labels the recording; it doesn't change the
    stimulus.
-3. Pick the **stripe direction**: `← Left` or `Right →`. Right is the default
-   and the original stimulus. Direction applies to *OKN* and *Dot + Moving
-   Stripes*. Still stripes are named `NONE`.
-4. Tap a trial button, rotate to landscape, and tap **Check Position**. The
+   For **Pilot 03** also pick the **participant** (`P01` / `P02`, remembered
+   until changed); **Record** stays disabled until one is chosen.
+3. Pick the **condition** (`OKN`, `Dot + moving`, `Dot + still`) and, for
+   moving stripes, the **stripe direction** (`← Left` or `Right →`; Right is
+   the default). Still stripes show "Direction: none" and are named `NONE`.
+   The line below shows the next name without its timestamp, e.g.
+   `P03-P01_T041_OKN_LEFT`.
+4. Tap **Record 10 Seconds**, rotate to landscape, and tap **Check Position**.
+   Test type, participant, condition and direction are fixed from here on. The
    card shows face detection and an approximate distance:
    - "No face detected", "Move closer (35 cm)" or "Move farther away (20 cm)";
    - "Good positioning — 28 cm" once the distance is in range;
@@ -112,7 +117,12 @@ DEV_T001_OKN_RIGHT_20261104_143022.csv / .json
 DIR_T002_OKN_LEFT_20261104_143105.csv / .json
 FIX_T003_FIXSTILL_NONE_20261104_143145.csv / .json
 P02_T004_FIXMOVE_RIGHT_20261104_143220.csv / .json
+P03-P01_T005_OKN_LEFT_20261106_150030.csv / .json
 ```
+
+A trial with a participant (Pilot 03) writes `{code}-{participant}` in the
+`TEST` field, e.g. `P03-P01`. That already fits contract 1 (`TEST` allows
+`A–Z 0–9 -`), so older receivers accept it and the contract number is unchanged.
 
 | Test Type (menu) | Code | Purpose |
 |---|---|---|
@@ -124,6 +134,7 @@ P02_T004_FIXMOVE_RIGHT_20261104_143220.csv / .json
 | Fixation Control | `FIX` | Test fixation without OKN |
 | Distance Test | `DIST` | Validate pre-trial distance measurement |
 | Pilot 02 | `P02` | Formal next pilot recordings |
+| Pilot 03 | `P03` | High-contrast OKN validation, participants `P01`/`P02`; constant white background (see [docs/PILOT_03.md](docs/PILOT_03.md)) |
 
 - **Timestamp:** the recording start in **UTC**, the same instant as
   `startedAt` in the JSON.
@@ -142,9 +153,13 @@ P02_T004_FIXMOVE_RIGHT_20261104_143220.csv / .json
 - **Older recordings** keep their names (`NS_<date>_<id>_<mode>`, and schema 4
   `EXP_T…`). The receiver and every script still accept them.
 
-The sidecar (schema 5) adds:
+The sidecar (schema 6) adds:
 - `experimentID` (the test-type code), `testTypeName`, `trialNumber`,
   `recordingName`;
+- schema 6: `participantID` (Pilot 03) and `directionCode` (`RIGHT` / `LEFT` /
+  `NONE`, as in the name). The receiver refuses a sidecar whose
+  `recordingName` or `participantID` disagrees with the file name
+  (`mismatched_metadata`);
 - `faceDistance`: `check`, `recommendedRangeCm`, `atStartCm`, `medianCm`,
   `minCm`, `maxCm`, `fractionOutsideRange`, and the definition above.
 

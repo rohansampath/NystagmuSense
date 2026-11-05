@@ -546,6 +546,35 @@ struct TestViewModelTests {
         #expect(experiment.nextTrialNumber == 1)
     }
 
+    @Test func pilot03WithoutParticipantNeverStarts() {
+        experiment.defaults.set(TestType.pilot03.code, forKey: ExperimentLog.testTypeKey)
+        let vm = makeVM()
+        vm.startPositioning()
+        vm.start()
+        #expect(provider.startCount == 0)
+        guard case .failed(let message) = vm.phase else { Issue.record("expected failure"); return }
+        #expect(message.contains("participant"))
+        #expect(experiment.nextTrialNumber == 1)
+    }
+
+    @Test func pilot03NameAndMetadataUseTheSelectionMadeBeforeRecording() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        experiment.defaults.set(TestType.pilot03.code, forKey: ExperimentLog.testTypeKey)
+        experiment.defaults.set(Participant.p02.rawValue, forKey: ExperimentLog.participantKey)
+        let vm = makeVM(uploader: nil)
+        vm.start()
+        provider.emit(Fixture.tracked(at: 100.0))
+        // Changing the menu mid-trial must not relabel this recording.
+        experiment.defaults.set(Participant.p01.rawValue, forKey: ExperimentLog.participantKey)
+        experiment.defaults.set(TestType.direction.code, forKey: ExperimentLog.testTypeKey)
+        vm.finish()
+        let names = exportedSessions().map(\.lastPathComponent)
+        #expect(names.count == 1 && names[0].hasPrefix("P03-P02_T001_OKN_RIGHT_"))
+        let meta = try exportedMetadata()
+        #expect(meta.experimentID == "P03" && meta.participantID == "P02" && meta.directionCode == "RIGHT")
+        #expect(meta.recordingName == names[0])
+    }
+
     @Test func leftwardDirectionIsSavedAndNamed() throws {
         defer { try? FileManager.default.removeItem(at: outputDir) }
         let vm = TestViewModel(provider: provider,
