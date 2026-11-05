@@ -19,7 +19,9 @@ physiological ground truth.
 | `manifest.csv` | Every P03 recording, with its technical status, eligibility and development/evaluation split. **Frozen**: `build_manifest.py --check` must reproduce it exactly. |
 | `build_manifest.py` | Builds the manifest from file names, sidecars and CSV timing only. It never reads labels or detector output. |
 | `check_labels.py` | Writes `label_flags.csv`, the labels to look at again. It uses the raw signal and never edits labels. |
-| `sweep/` | Output of `scripts/sweep_okn_threshold.py`, development trials only. |
+| `benchmark_summary.md` | First development-only benchmark: sweep, breakdowns, failure analysis and limitations. |
+| `threshold_sweep.csv/.png`, `false_positives.png`, `per_condition.csv`, `dev_trials_<thr>.csv` | Output of `scripts/sweep_okn_threshold.py`, development trials only. |
+| `failure_cases.py` → `failure_cases.csv`, `failure_summary.csv`, `failure_examples.png` | Classifies each development miss and false positive at one threshold. |
 
 ## Eligibility (fixed before any detector results)
 
@@ -31,7 +33,7 @@ physiological ground truth.
   - timestamps that don't increase;
   - any issue logged in the sidecar.
 
-  None of the 48 P03 recordings failed.
+  Of the 49 P03 recordings, only P01 T056 failed (1 % face-tracked); it was recorded after the split was frozen and changes nothing else.
 - **Notes, not exclusions:**
   - Distance drift outside 25–30 cm. Participants leaned in to a median of 22–25 cm in 12 trials.
   - The bypassed distance check in P01 T017. Its measured distance stayed at 26.9–28.7 cm.
@@ -116,7 +118,8 @@ L=~/CS_Projects/NystagmuSense-annot/analysis/annotations_p03
 python3 analysis/pilot_03/build_manifest.py --trials-dir $T --check           # manifest unchanged?
 python3 analysis/pilot_03/check_labels.py --labels-dir $L --trials-dir $T     # labels to re-check
 python3 scripts/evaluate_okn.py --manifest analysis/pilot_03/manifest.csv --split development \
-    --labels-dir $L --trials-dir $T --artifacts exclude --output-csv analysis/pilot_03/sweep/dev_baseline_trials.csv
+    --labels-dir $L --trials-dir $T --artifacts exclude
 python3 scripts/sweep_okn_threshold.py --manifest analysis/pilot_03/manifest.csv \
-    --labels-dir $L --trials-dir $T --output-dir analysis/pilot_03/sweep
+    --labels-dir $L --trials-dir $T --output-dir analysis/pilot_03
+python3 analysis/pilot_03/failure_cases.py --labels-dir $L --trials-dir $T --threshold 24
 ```

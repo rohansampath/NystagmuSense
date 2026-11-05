@@ -1,0 +1,17 @@
+condition,kind,cause,count
+FIXMOVE,FN,below threshold after SG smoothing,6
+FIXMOVE,FN,detected 100-200 ms away,2
+FIXMOVE,FN,small movement (below threshold even unsmoothed),43
+FIXMOVE,FP,against expected reset direction,6
+FIXMOVE,FP,against expected reset direction [next to masked data],4
+FIXMOVE,FP,"right direction, no slow phase before it",2
+FIXMOVE,FP,"right direction, no slow phase before it [next to masked data]",2
+FIXSTILL,FP,still stripes: 1-sample spike,1
+FIXSTILL,FP,still stripes: saccade/noise,2
+FIXSTILL,FP,still stripes: saccade/noise [next to masked data],1
+OKN,FN,below threshold after SG smoothing,12
+OKN,FN,small movement (below threshold even unsmoothed),5
+OKN,FP,against expected reset direction,24
+OKN,FP,against expected reset direction [next to masked data],5
+OKN,FP,"right direction, no slow phase before it",11
+OKN,FP,"right direction, no slow phase before it [next to masked data]",4

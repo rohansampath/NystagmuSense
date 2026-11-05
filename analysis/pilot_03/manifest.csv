@@ -24,6 +24,7 @@ P03-P01_T029_FIXSTILL_NONE_20261105_025353,P01,29,FIXSTILL,NONE,.,pass,,primary,
 P03-P01_T030_FIXSTILL_NONE_20261105_025408,P01,30,FIXSTILL,NONE,.,pass,,primary,,development
 P03-P01_T031_FIXSTILL_NONE_20261105_025444,P01,31,FIXSTILL,NONE,.,pass,,primary,,evaluation
 P03-P01_T032_FIXSTILL_NONE_20261105_025459,P01,32,FIXSTILL,NONE,.,pass,,primary,,development
+P03-P01_T056_OKN_RIGHT_20261105_054006,P01,56,OKN,RIGHT,.,fail,only 1% face-tracked,excluded,technical failure,
 P03-P02_T033_OKN_LEFT_20261105_025622,P02,33,OKN,LEFT,.,pass,,primary,,development
 P03-P02_T034_OKN_LEFT_20261105_025651,P02,34,OKN,LEFT,.,pass,,primary,,development
 P03-P02_T035_OKN_LEFT_20261105_025732,P02,35,OKN,LEFT,.,pass,distance outside 25-30 cm for 61% of the trial (median 25.0 cm),primary,,evaluation

@@ -2,7 +2,7 @@
 """Development-only sweep of the SG fast-phase velocity threshold.
 
     python3 scripts/sweep_okn_threshold.py --manifest analysis/pilot_03/manifest.csv \\
-        --labels-dir <labels> [--trials-dir trials] [--output-dir analysis/pilot_03/sweep]
+        --labels-dir <labels> [--trials-dir trials] [--output-dir analysis/pilot_03]
 
 Scores detect_okn.py's SG detector (all other parameters at their defaults)
 on the manifest's primary DEVELOPMENT trials only, with evaluate_okn.py's
@@ -18,7 +18,8 @@ tied, and among those the one with the fewest false positives per 10 s wins
 baseline.
 
 Writes threshold_sweep.csv (every threshold × group), per_condition.csv
-(best vs 40 deg/s), prf_vs_threshold.png and fp_rate_vs_threshold.png.
+(best vs 40 deg/s), dev_trials_<thr>.csv (per trial, best and 40 deg/s),
+threshold_sweep.png (P/R/F1) and false_positives.png (FP per 10 s).
 Labels are ARKit-visible events, not physiological ground truth.
 """
 
@@ -42,13 +43,14 @@ def predictions_at(threshold):
 
 
 def sweep(labels_dir, trials_dir, include, thresholds=THRESHOLDS, tolerance=evaluate_okn.DEFAULT_TOLERANCE_S):
-    """{threshold: [(kind, value, summary)]} on the given trials."""
-    results = {}
+    """({threshold: [(kind, value, summary)]}, {threshold: per-trial scores}) on the given trials."""
+    results, trials = {}, {}
     for thr in thresholds:
         scored, _ = evaluate_okn.evaluate(labels_dir, trials_dir, tolerance, predict=predictions_at(thr),
                                           include=include, artifacts="exclude")
         results[thr] = evaluate_okn.group_rows(scored)
-    return results
+        trials[thr] = scored
+    return results, trials
 
 
 def overall(rows):
@@ -74,7 +76,7 @@ def row(thr, kind, value, g):
                 fp_per_10s=num(g["fp_per_10s"]), mean_abs_offset_ms=num(g["mean_abs_offset_ms"], 1))
 
 
-def write_outputs(results, best, out_dir):
+def write_outputs(results, trials, best, out_dir):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -89,6 +91,8 @@ def write_outputs(results, best, out_dir):
         w.writeheader()
         for thr in sorted({best, BASELINE}):
             w.writerows(row(thr, kind, value, g) for kind, value, g in results[thr] if kind != "all")
+    for thr in sorted({best, BASELINE}):
+        evaluate_okn.write_trial_csv(trials[thr], out_dir / f"dev_trials_{thr}.csv")
     ts = list(results)
     get = lambda key, rows: [overall(results[t])[key] for t in ts] if rows is None else \
         [next((g[key] for k, v, g in results[t] if (k, v) == rows), None) for t in ts]
@@ -101,7 +105,7 @@ def write_outputs(results, best, out_dir):
     ax.grid(alpha=0.3)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(out_dir / "prf_vs_threshold.png", dpi=120)
+    fig.savefig(out_dir / "threshold_sweep.png", dpi=120)
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.plot(ts, get("fp_per_10s", None), "o-", color="k", label="all development")
     conditions = sorted({v for k, v, _ in results[ts[0]] if k == "condition"})
@@ -113,7 +117,7 @@ def write_outputs(results, best, out_dir):
     ax.grid(alpha=0.3)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(out_dir / "fp_rate_vs_threshold.png", dpi=120)
+    fig.savefig(out_dir / "false_positives.png", dpi=120)
     plt.close("all")
 
 
@@ -122,7 +126,7 @@ def main(argv=None):
     ap.add_argument("--manifest", type=Path, required=True)
     ap.add_argument("--labels-dir", type=Path, required=True)
     ap.add_argument("--trials-dir", type=Path, default=Path(__file__).resolve().parents[1] / "trials")
-    ap.add_argument("--output-dir", type=Path, default=Path("analysis/pilot_03/sweep"))
+    ap.add_argument("--output-dir", type=Path, default=Path("analysis/pilot_03"))
     ap.add_argument("--allow-incomplete", action="store_true",
                     help="run even though some development trials aren't completely reviewed")
     args = ap.parse_args(argv)
@@ -133,9 +137,9 @@ def main(argv=None):
         print(f"error: {len(missing)} development trials aren't completely reviewed:\n  " + "\n  ".join(missing),
               file=sys.stderr)
         return 1
-    results = sweep(args.labels_dir, args.trials_dir, include)
+    results, trials = sweep(args.labels_dir, args.trials_dir, include)
     best = choose(results)
-    write_outputs(results, best, args.output_dir)
+    write_outputs(results, trials, best, args.output_dir)
     print(f"development trials scored: {overall(results[BASELINE])['n_trials']} of {len(include)}")
     print(f"{'thr':>4}  P     R     F1    FP/10s")
     for thr, rows in results.items():

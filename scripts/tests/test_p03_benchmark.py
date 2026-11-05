@@ -151,6 +151,16 @@ class EvaluationTests(Fixture):
         g = evaluate_okn.summarize([quiet])
         self.assertEqual((g["precision"], g["recall"], g["f1"], g["fp_per_10s"]), (None, None, None, 0))
 
+    def test_pooled_f1_is_never_raised_by_control_trials(self):
+        okn = evaluate_okn.score_trial([(1.0, "fast_phase"), (2.0, "fast_phase")], [1.02, 3.0], 0.1)
+        noisy = evaluate_okn.score_trial([], [4.0, 6.0], 0.1)
+        quiet = evaluate_okn.score_trial([], [], 0.1)
+        for s in (okn, noisy, quiet):
+            s.update(duration_s=10, mean_abs_offset_s=None)
+        alone = evaluate_okn.summarize([okn])["f1"]
+        self.assertAlmostEqual(evaluate_okn.summarize([okn, quiet])["f1"], alone)       # a silent control adds nothing
+        self.assertLess(evaluate_okn.summarize([okn, noisy])["f1"], alone)              # its false alarms only lower F1
+
     def test_artifact_policy_is_explicit(self):
         events = [(1.0, "fast_phase"), (3.0, "artifact"), (5.0, "uncertain")]
         preds = [1.02, 3.04, 5.01, 7.0]
@@ -194,7 +204,7 @@ class SweepTests(Fixture):
             self.assertEqual(sweep_okn_threshold.main(["--manifest", str(path), "--labels-dir", str(self.labels),
                                                        "--trials-dir", str(self.trials)]), 1)
         include = evaluate_okn.load_manifest(path, "development")
-        results = sweep_okn_threshold.sweep(self.labels, self.trials, include, thresholds=[20, 40])
+        results, _ = sweep_okn_threshold.sweep(self.labels, self.trials, include, thresholds=[20, 40])
         self.assertEqual(sweep_okn_threshold.overall(results[40])["n_trials"], 27)    # 28 minus the in-progress one
 
 
