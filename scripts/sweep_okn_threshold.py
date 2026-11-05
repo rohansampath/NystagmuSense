@@ -42,12 +42,21 @@ def predictions_at(threshold):
     return lambda path: [f["start"] for f in detect_okn.analyse(detect_okn.load_session(path), params)["fast"]]
 
 
-def sweep(labels_dir, trials_dir, include, thresholds=THRESHOLDS, tolerance=evaluate_okn.DEFAULT_TOLERANCE_S):
+def sweep(labels_dir, trials_dir, include, thresholds=THRESHOLDS, tolerance=evaluate_okn.DEFAULT_TOLERANCE_S,
+          annotator=None, allow_incomplete=True):
     """({threshold: [(kind, value, summary)]}, {threshold: per-trial scores}) on the given trials."""
+    reviews = evaluate_okn.development_reviews(labels_dir, include, annotator)
+    who = next((r["annotator_id"] for r in reviews.values()), annotator)
+    if who is None:
+        raise ValueError("no development reviews found")
     results, trials = {}, {}
     for thr in thresholds:
-        scored, _ = evaluate_okn.evaluate(labels_dir, trials_dir, tolerance, predict=predictions_at(thr),
+        scored, skipped = evaluate_okn.evaluate(labels_dir, trials_dir, tolerance, annotator=who, predict=predictions_at(thr),
                                           include=include, artifacts="exclude")
+        if skipped and not allow_incomplete:
+            raise ValueError("development trials could not be scored: " + "; ".join(f"{t}: {why}" for t, _, why in skipped))
+        if not scored:
+            raise ValueError("no development recordings could be scored")
         results[thr] = evaluate_okn.group_rows(scored)
         trials[thr] = scored
     return results, trials
@@ -125,19 +134,29 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--manifest", type=Path, required=True)
     ap.add_argument("--labels-dir", type=Path, required=True)
+    ap.add_argument("--annotator", help="independent annotator to score (required if more than one is present)")
     ap.add_argument("--trials-dir", type=Path, default=Path(__file__).resolve().parents[1] / "trials")
     ap.add_argument("--output-dir", type=Path, default=Path("analysis/pilot_03"))
     ap.add_argument("--allow-incomplete", action="store_true",
                     help="run even though some development trials aren't completely reviewed")
     args = ap.parse_args(argv)
     include = evaluate_okn.load_manifest(args.manifest, "development")      # never the evaluation split
-    reviews = {r["trial_id"]: r["status"] for r in evaluate_okn.annotate_okn._read_rows(args.labels_dir / "reviews.csv")}
-    missing = sorted(t for t in include if reviews.get(t) != "complete")
+    try:
+        reviews = evaluate_okn.development_reviews(args.labels_dir, include, args.annotator)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    missing = sorted(t for t in include if reviews.get(t, {}).get("status") != "complete")
     if missing and not args.allow_incomplete:
         print(f"error: {len(missing)} development trials aren't completely reviewed:\n  " + "\n  ".join(missing),
               file=sys.stderr)
         return 1
-    results, trials = sweep(args.labels_dir, args.trials_dir, include)
+    try:
+        results, trials = sweep(args.labels_dir, args.trials_dir, include, annotator=args.annotator,
+                               allow_incomplete=args.allow_incomplete)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     best = choose(results)
     write_outputs(results, trials, best, args.output_dir)
     print(f"development trials scored: {overall(results[BASELINE])['n_trials']} of {len(include)}")

@@ -54,9 +54,9 @@ def peak_near(t, v, x, tol=TOL):
     return float(v[i]), int(np.sign(v[i]))
 
 
-def load(labels_dir, trials_dir, manifest, threshold):
+def load(labels_dir, trials_dir, manifest, threshold, annotator=None):
     include = evaluate_okn.load_manifest(manifest, "development")
-    reviews = {r["trial_id"]: r for r in annotate_okn._read_rows(Path(labels_dir) / "reviews.csv")}
+    reviews = evaluate_okn.development_reviews(labels_dir, include, annotator)
     events = annotate_okn._read_rows(Path(labels_dir) / "events.csv")
     out = []
     for tid, row in sorted(include.items()):
@@ -65,7 +65,7 @@ def load(labels_dir, trials_dir, manifest, threshold):
         path = evaluate_okn.find_recording(tid, trials_dir, reviews[tid])
         data = detect_okn.load_session(path)
         r = detect_okn.analyse(data, detect_okn.Params(fast_threshold=threshold))
-        evs = [(float(e["event_time_s"]), e["label"]) for e in events if e["trial_id"] == tid]
+        evs = evaluate_okn.review_events(events, reviews[tid])
         out.append(dict(trial_id=tid, row=row, r=r, events=evs,
                         raw=raw_velocity(r["t"], r["angle"], r["valid"])))
     return out
@@ -216,13 +216,14 @@ def plot_examples(trials, rows, threshold, path):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--labels-dir", type=Path, required=True)
+    ap.add_argument("--annotator", help="independent annotator to analyse")
     ap.add_argument("--trials-dir", type=Path, default=ROOT / "trials")
     ap.add_argument("--manifest", type=Path, default=Path(__file__).resolve().parent / "manifest.csv")
     ap.add_argument("--threshold", type=float, default=24)
     ap.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent)
     args = ap.parse_args(argv)
     thr = int(args.threshold) if args.threshold == int(args.threshold) else args.threshold
-    trials = load(args.labels_dir, args.trials_dir, args.manifest, args.threshold)
+    trials = load(args.labels_dir, args.trials_dir, args.manifest, args.threshold, args.annotator)
     expected, votes = expected_reset_directions(trials)
     print(f"development trials: {len(trials)}; expected reset sign by stripe direction: {dict(expected)} "
           f"(votes {dict((k, dict(v)) for k, v in votes.items())})")

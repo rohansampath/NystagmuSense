@@ -185,6 +185,33 @@ class EvaluationTests(Fixture):
 
 
 class SweepTests(Fixture):
+    def test_multiple_annotators_need_selection_and_events_stay_separate(self):
+        tid = write_recording(self.trials, "P01", 1, "OKN", "RIGHT")
+        include = {tid: dict(participant="P01", condition="OKN", direction="RIGHT", split="development")}
+        annotate_okn.save_annotations(self.labels, tid, "AA", [(1.0, "fast_phase")], "manual", True)
+        annotate_okn.save_annotations(self.labels, tid, "BB", [(2.0, "fast_phase")], "manual", True)
+        with self.assertRaisesRegex(ValueError, "--annotator"):
+            sweep_okn_threshold.sweep(self.labels, self.trials, include, thresholds=[40])
+        reviews = evaluate_okn.development_reviews(self.labels, include, "AA")
+        events = annotate_okn._read_rows(self.labels / "events.csv")
+        self.assertEqual(evaluate_okn.review_events(events, reviews[tid]), [(1.0, "fast_phase")])
+        _, trials = sweep_okn_threshold.sweep(self.labels, self.trials, include, thresholds=[40], annotator="AA")
+        self.assertEqual(len(trials[40]), 1)
+        self.assertEqual(trials[40][0]["n_ref"], 1)
+
+    def test_missing_recording_blocks_complete_sweep(self):
+        tid = write_recording(self.trials, "P01", 1, "OKN", "RIGHT")
+        include = {tid: dict(participant="P01", condition="OKN", direction="RIGHT", split="development")}
+        annotate_okn.save_annotations(self.labels, tid, "AA", [], "manual", True)
+        (self.trials / tid / f"{tid}.csv").unlink()
+        with self.assertRaisesRegex(ValueError, "recording not found"):
+            sweep_okn_threshold.sweep(self.labels, self.trials, include, thresholds=[40], allow_incomplete=False)
+
+    def test_assisted_labels_cannot_enter_independent_benchmark(self):
+        annotate_okn.save_annotations(self.labels, "trial", "AA", [], "assisted", True)
+        with self.assertRaisesRegex(ValueError, "manual"):
+            evaluate_okn.development_reviews(self.labels, {"trial": {}})
+
     def test_choice_prefers_f1_then_fewer_false_positives(self):
         def res(f1, fp):
             return [("all", "all", dict(f1=f1, fp_per_10s=fp))]

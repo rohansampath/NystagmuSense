@@ -41,6 +41,7 @@ Labels describe events visible in ARKit data, not physiological ground truth.
 
 import argparse
 import csv
+import math
 import sys
 from pathlib import Path
 
@@ -113,6 +114,33 @@ def load_manifest(path, split):
     if not rows:
         raise ValueError(f"no primary {split} trials in {path}")
     return {r["trial_id"]: r for r in rows}
+
+
+def development_reviews(labels_dir, include, annotator=None):
+    """Select one independent annotator for development analysis.
+
+    Never pool repeated reviews as additional recordings or mix their events.
+    Infer the annotator only when the selection is unambiguous.
+    """
+    reviews = [r for r in annotate_okn._read_rows(Path(labels_dir) / "reviews.csv")
+               if r["trial_id"] in include and (annotator is None or r["annotator_id"] == annotator)]
+    ids = {r["annotator_id"] for r in reviews}
+    if len(ids) > 1:
+        raise ValueError("multiple annotators found; select one with --annotator")
+    selected = {}
+    for r in reviews:
+        if r["trial_id"] in selected:
+            raise ValueError(f"duplicate review for {r['trial_id']}")
+        if r["annotation_method"] != "manual":
+            raise ValueError(f"{r['trial_id']}: development benchmark requires independent manual labels")
+        selected[r["trial_id"]] = r
+    return selected
+
+
+def review_events(events, review):
+    """Events belonging to exactly the selected trial and annotator."""
+    return [(float(e["event_time_s"]), e["label"]) for e in events
+            if e["trial_id"] == review["trial_id"] and e["annotator_id"] == review["annotator_id"]]
 
 
 def evaluate(labels_dir, trials_dir, tolerance=DEFAULT_TOLERANCE_S, annotator=None, predict=detector_predictions,
@@ -245,8 +273,8 @@ def main(argv=None):
                     help="predictions on artifact labels: count as FP (default) or leave unscored")
     ap.add_argument("--output-csv", type=Path, help="per-trial results (one file per detector)")
     args = ap.parse_args(argv)
-    if args.tolerance_ms <= 0:
-        ap.error("--tolerance-ms must be positive")
+    if not math.isfinite(args.tolerance_ms) or args.tolerance_ms <= 0:
+        ap.error("--tolerance-ms must be finite and positive")
     if bool(args.manifest) != bool(args.split):
         ap.error("--manifest and --split go together")
     if args.split == "evaluation" and not args.allow_evaluation:
