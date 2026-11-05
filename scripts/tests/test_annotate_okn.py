@@ -289,6 +289,20 @@ class QueueTests(TempLabels):
         scored, skipped = evaluate_okn.evaluate(self.labels, self.dir / "trials")
         self.assertEqual(([s["trial_id"] for s in scored], skipped), (["R1"], []))
 
+    def test_label_guide_follows_each_trials_stripe_direction(self):
+        right, left = self.recording("R1"), self.recording("R2")
+        still = self.recording("R3", mode="fixationStillStripes")
+        for path, direction in ((right, "rightward"), (left, "leftward")):
+            meta = json.loads(path.with_suffix(".json").read_text())
+            meta["stimulus"]["direction"] = direction
+            path.with_suffix(".json").write_text(json.dumps(meta))
+        a = self.open([right, left, still])
+        self.assertIn("UP", a.label_guide()[1][1])          # rightward: resets jump up
+        a.go(1)
+        self.assertIn("DOWN", a.label_guide()[1][1])        # leftward: resets jump down
+        a.go(1)
+        self.assertEqual(a.label_guide()[0], "stripes are STILL")
+
     def test_zoom_keys_stay_inside_the_recording(self):
         a = self.open(self.queue("R1"))
         full = a.ax_a.get_xlim()

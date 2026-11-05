@@ -433,10 +433,27 @@ class Annotator:
             toolbar.update()        # forget the previous trial's zoom history
         self.redraw()
 
+    def label_guide(self):
+        """What a reset looks like in this trial, in the plotted convention
+        (+ = subject's left, from the Pilot 01 look-left/right trials)."""
+        if self.mode == "fixationStillStripes":
+            return "stripes are STILL", ["no OKN expected", "saccades are not fast phases", "(use 2 if unsure)"]
+        if self.direction == "rightward":
+            return "stripes move RIGHT →", ["slow phase: gradual drift DOWN ↓", "reset: sharp jump UP ↑  → press 1",
+                                            "sharp jump DOWN = not a reset"]
+        if self.direction == "leftward":
+            return "stripes move ← LEFT", ["slow phase: gradual drift UP ↑", "reset: sharp jump DOWN ↓  → press 1",
+                                           "sharp jump UP = not a reset"]
+        return "stripe direction unknown", ["reset = sharp jump against", "the slow drift"]
+
     def _draw_help(self):
         ax = self.ax_help
         ax.clear()
         ax.set_axis_off()
+        title, lines = self.label_guide()
+        ax.text(0, 1.0, "What to label", fontsize=11, weight="bold", va="top", transform=ax.transAxes)
+        ax.text(0.02, 0.952, title + "\n" + "\n".join(lines), fontsize=10, va="top", linespacing=1.45,
+                transform=ax.transAxes, bbox=dict(boxstyle="round,pad=0.4", facecolor="#fff6d5", edgecolor="#d9b84a"))
         if self.suggestions_allowed:
             suggestion_rows = [("T", "show / hide suggestions"), ("Y", "accept shown ones in view")]
         else:
@@ -447,15 +464,15 @@ class Annotator:
             ("Labelling", [("1", ("fast phase", "fast_phase")), ("2", ("uncertain", "uncertain")),
                            ("3", ("artifact", "artifact")), ("click", "add label"),
                            ("right-click", "remove nearest"), ("Z", "undo")]),
-            ("Saving", [("S", "save"), ("X", "mark reviewed / not"), ("", "closing the window saves")]),
+            ("Saving", [("S", "save (closing also saves)"), ("X", "mark reviewed / not")]),
             ("View", [("+ / −", "zoom at cursor"), ("shift+← / →", "scroll in time"),
                       ("R", "reset zoom"), ("H", "hide this panel")]),
             ("Suggestions", suggestion_rows),
         ]
-        y = 1.0
+        y = 0.952 - 0.032 * (len(lines) + 1) - 0.05
         for title, rows in sections:
             ax.text(0, y, title, fontsize=11, weight="bold", va="top", transform=ax.transAxes)
-            y -= 0.048
+            y -= 0.044
             for key, desc in rows:
                 ax.text(0.02, y, key, fontsize=10, family="monospace", weight="bold", va="top",
                         transform=ax.transAxes)
@@ -466,8 +483,8 @@ class Annotator:
                     ax.text(0.56, y, text, fontsize=10, va="top", transform=ax.transAxes)
                 else:
                     ax.text(0.40, y, desc, fontsize=10, va="top", transform=ax.transAxes)
-                y -= 0.040
-            y -= 0.018
+                y -= 0.036
+            y -= 0.014
 
     def redraw(self):
         for a in self.artists:
@@ -486,7 +503,10 @@ class Annotator:
                              f"Remaining {n_total - done}")
         tag, color = SPLIT_TAGS[self.split]
         condition = CONDITIONS.get(self.mode, self.mode)
-        direction = f" · stripes {self.direction}" if self.direction else ""
+        if self.mode == "fixationStillStripes":
+            direction = " · stripes still"
+        else:
+            direction = f" · stripes {self.direction}" if self.direction else ""
         pilot = f"{self.pilot_id} · " if self.pilot_id else ""
         self.subheader.set_text(f"{tag}   ·   {pilot}{condition}{direction}")
         self.subheader.set_color(color)
