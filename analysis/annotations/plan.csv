@@ -1,0 +1,13 @@
+split,order,pilot_id,trial_id,note
+evaluation,1,A3,NS_20261104-001938_2F10DCDB_okn,
+evaluation,2,A4,NS_20261104-002030_1D472ADC_okn,
+evaluation,3,A5,NS_20261104-002134_F5DFEFF3_okn,
+evaluation,4,B2,NS_20261104-001755_51DB182F_fixmove,
+evaluation,5,B3,NS_20261104-001957_DC24C342_fixmove,
+evaluation,6,C2,NS_20261104-001822_12E51902_fixstill,
+evaluation,7,C3,NS_20261104-001918_C78484EE_fixstill,
+development,1,A1,NS_20261104-001649_3B564048_okn,
+development,2,A2,NS_20261104-001846_1935C8DE_okn,
+development,3,B1,NS_20261104-001709_9A6B885A_fixmove,
+development,4,C1,NS_20261104-001727_3611D4CA_fixstill,
+development,5,V5,NS_20261104-001457_0DB297A4_fixstill,artifact check: label blink artefacts as artifact (key 3)

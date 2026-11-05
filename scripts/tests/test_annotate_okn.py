@@ -9,6 +9,7 @@ import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -152,6 +153,175 @@ class AnnotatorGUITests(TempLabels):
         self.assertEqual(a.method, "assisted")
         a.save()
         self.assertEqual(self.open(path).method, "assisted")
+
+
+class QueueTests(TempLabels):
+    def queue(self, *names):
+        return [self.recording(n) for n in names]
+
+    def open(self, trials, assisted=False, plan=None, start=None):
+        a = annotate_okn.Annotator(trials, "AA", self.labels, assisted=assisted, show=False,
+                                   plan=plan or {}, start=start)
+        self.addCleanup(a.plt.close, a.fig)
+        return a
+
+    def test_next_and_previous_autosave_and_reload(self):
+        a = self.open(self.queue("R1", "R2", "R3"))
+        a.on_click(FakeEvent(a.ax_a, 2.3))
+        a.on_key(FakeEvent(key="right"))                    # saves R1, opens R2
+        self.assertEqual((a.index, a.trial_id, a.events, a.dirty), (1, "R2", [], False))
+        saved, review = annotate_okn.load_annotations(self.labels, "R1", "AA")
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(review["status"], "in_progress")   # navigating never marks reviewed
+        a.on_key(FakeEvent(key="left"))                     # back to R1 with its label
+        self.assertEqual((a.trial_id, len(a.events)), ("R1", 1))
+
+    def test_ends_of_queue_do_not_wrap(self):
+        a = self.open(self.queue("R1", "R2"))
+        self.assertFalse(a.go(-1))
+        self.assertEqual(a.index, 0)
+        self.assertIn("first trial", a.message)
+        a.go(1)
+        self.assertFalse(a.go(1))
+        self.assertEqual(a.index, 1)
+        self.assertIn("last trial", a.message)
+
+    def test_untouched_trials_are_not_written(self):
+        a = self.open(self.queue("R1", "R2"))
+        a.go(1)
+        self.assertFalse((self.labels / "reviews.csv").exists())
+
+    def test_save_failure_blocks_navigation_and_keeps_edits(self):
+        a = self.open(self.queue("R1", "R2"))
+        a.on_click(FakeEvent(a.ax_a, 2.3))
+        with unittest.mock.patch.object(annotate_okn, "save_annotations", side_effect=OSError("disk full")):
+            self.assertFalse(a.go(1))
+        self.assertEqual((a.trial_id, len(a.events), a.dirty), ("R1", 1, True))
+        self.assertIn("SAVE FAILED", a.message)
+        self.assertTrue(a.go(1))                            # works once saving works again
+        self.assertEqual(len(annotate_okn.load_annotations(self.labels, "R1", "AA")[0]), 1)
+
+    def test_review_status_and_zero_event_trials_survive_navigation(self):
+        a = self.open(self.queue("R1", "R2"))
+        a.on_key(FakeEvent(key="x"))                        # reviewed, no events
+        a.go(1)
+        a.go(-1)
+        self.assertTrue(a.complete)
+        self.assertEqual(a.events, [])
+        _, review = annotate_okn.load_annotations(self.labels, "R1", "AA")
+        self.assertEqual((review["status"], review["n_fast_phase"]), ("complete", "0"))
+        self.assertEqual(a.reviewed_count(), 1)
+        a.go(1)
+        self.assertFalse(a.complete)                        # R2 untouched: still unreviewed
+
+    def test_resumes_at_first_unreviewed_trial_or_start(self):
+        paths = self.queue("R1", "R2", "R3")
+        annotate_okn.save_annotations(self.labels, "R1", "AA", [], "manual", complete=True)
+        annotate_okn.save_annotations(self.labels, "R2", "AA", [(2.3, "fast_phase")], "manual", complete=False)
+        annotate_okn.save_annotations(self.labels, "R2", "BB", [], "manual", complete=True)   # other annotator
+        self.assertEqual(self.open(paths).trial_id, "R2")
+        plan = {"R3": {"split": "development", "pilot_id": "A9"}}
+        self.assertEqual(annotate_okn.resolve_start(paths, plan, "A9"), 2)
+        self.assertEqual(annotate_okn.resolve_start(paths, plan, "1"), 0)
+        self.assertEqual(annotate_okn.resolve_start(paths, plan, "R2"), 1)
+        with self.assertRaises(ValueError):
+            annotate_okn.resolve_start(paths, plan, "B7")
+        self.assertEqual(self.open(paths, start=2).trial_id, "R3")
+
+    def test_close_saves_unsaved_changes(self):
+        a = self.open(self.queue("R1"))
+        a.on_click(FakeEvent(a.ax_a, 2.3))
+        a.on_close(None)
+        self.assertEqual(len(annotate_okn.load_annotations(self.labels, "R1", "AA")[0]), 1)
+
+    def test_other_annotators_labels_are_kept(self):
+        annotate_okn.save_annotations(self.labels, "R1", "BB", [(5.0, "artifact")], "manual", complete=True)
+        a = self.open(self.queue("R1", "R2"))
+        self.assertEqual(a.events, [])                      # BB's labels are not shown as AA's
+        a.on_click(FakeEvent(a.ax_a, 2.3))
+        a.go(1)
+        self.assertEqual(annotate_okn.load_annotations(self.labels, "R1", "BB")[0], [(5.0, "artifact")])
+
+    def test_evaluation_trials_never_get_suggestions_in_a_mixed_queue(self):
+        plan = {"R1": {"split": "evaluation", "pilot_id": "A3"}, "R2": {"split": "development", "pilot_id": "A1"}}
+        real = annotate_okn.propose_candidates
+        calls = []
+
+        def spy(*args, **kwargs):
+            calls.append(1)
+            return real(*args, **kwargs)
+        with unittest.mock.patch.object(annotate_okn, "propose_candidates", spy):
+            a = self.open(self.queue("R1", "R2"), assisted=True, plan=plan)
+            self.assertEqual((a.split, a.suggestions_allowed, a.suggestions, calls), ("evaluation", False, [], []))
+            a.on_key(FakeEvent(key="t"))
+            a.on_key(FakeEvent(key="y"))
+            self.assertEqual((a.suggestions_shown, a.events, a.method), (False, [], "manual"))
+            self.assertIn("held-out", a.message)
+            a.go(1)
+        self.assertTrue(a.suggestions_allowed)
+        self.assertEqual(len(calls), 1)
+        a.on_key(FakeEvent(key="t"))
+        self.assertTrue(a.suggestions_shown)
+
+    def test_split_queue_uses_plan_order_and_rejects_missing_files(self):
+        for name in ("R1", "R2", "R3"):
+            self.recording(name)
+        plan_path = self.dir / "plan.csv"
+        plan_path.write_text("split,order,pilot_id,trial_id,note\n"
+                             "evaluation,2,A4,R1,\ndevelopment,1,A1,R2,\nevaluation,1,A3,R3,\n")
+        plan = annotate_okn.load_plan(plan_path)
+        queue = annotate_okn.split_queue("evaluation", self.dir / "trials", plan)
+        self.assertEqual([p.stem for p in queue], ["R3", "R1"])
+        self.assertEqual([p.stem for p in annotate_okn.split_queue("development", self.dir / "trials", plan)], ["R2"])
+        plan["R9"] = {"split": "evaluation", "order": "3", "pilot_id": "A5", "trial_id": "R9"}
+        with self.assertRaisesRegex(ValueError, "missing recordings"):
+            annotate_okn.split_queue("evaluation", self.dir / "trials", plan)
+
+    def test_navigation_labels_stay_readable_by_evaluate(self):
+        a = self.open(self.queue("R1", "R2"))
+        a.on_click(FakeEvent(a.ax_a, 2.3))
+        a.on_key(FakeEvent(key="x"))
+        a.go(1)
+        with open(self.labels / "events.csv") as f:
+            self.assertEqual(f.readline().strip().split(","), annotate_okn.EVENT_FIELDS)
+        with open(self.labels / "reviews.csv") as f:
+            self.assertEqual(f.readline().strip().split(","), annotate_okn.REVIEW_FIELDS)
+        scored, skipped = evaluate_okn.evaluate(self.labels, self.dir / "trials")
+        self.assertEqual(([s["trial_id"] for s in scored], skipped), (["R1"], []))
+
+    def test_label_guide_follows_each_trials_stripe_direction(self):
+        right, left = self.recording("R1"), self.recording("R2")
+        still = self.recording("R3", mode="fixationStillStripes")
+        for path, direction in ((right, "rightward"), (left, "leftward")):
+            meta = json.loads(path.with_suffix(".json").read_text())
+            meta["stimulus"]["direction"] = direction
+            path.with_suffix(".json").write_text(json.dumps(meta))
+        a = self.open([right, left, still])
+        self.assertIn("UP", a.label_guide()[1][1])          # rightward: resets jump up
+        a.go(1)
+        self.assertIn("DOWN", a.label_guide()[1][1])        # leftward: resets jump down
+        a.go(1)
+        self.assertEqual(a.label_guide()[0], "stripes are STILL")
+
+    def test_zoom_keys_stay_inside_the_recording(self):
+        a = self.open(self.queue("R1"))
+        full = a.ax_a.get_xlim()
+        a.on_key(FakeEvent(key="+"))
+        lo, hi = a.ax_a.get_xlim()
+        self.assertAlmostEqual(hi - lo, (full[1] - full[0]) / 2)
+        for _ in range(5):
+            a.on_key(FakeEvent(key="shift+right"))
+        self.assertAlmostEqual(a.ax_a.get_xlim()[1], full[1])
+        a.on_key(FakeEvent(key="r"))
+        self.assertEqual(a.ax_a.get_xlim(), full)
+
+
+class PlanTests(unittest.TestCase):
+    def test_pilot_01_plan_keeps_the_documented_split(self):
+        plan = annotate_okn.load_plan()
+        by_split = {s: sorted(r["pilot_id"] for r in plan.values() if r["split"] == s) for s in annotate_okn.SPLITS}
+        self.assertEqual(by_split["evaluation"], ["A3", "A4", "A5", "B2", "B3", "C2", "C3"])
+        self.assertEqual(by_split["development"], ["A1", "A2", "B1", "C1", "V5"])
 
 
 class MatchingTests(unittest.TestCase):

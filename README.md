@@ -237,24 +237,33 @@ completely reviewed trials. There is no ML, no database and no new dependency.
 Labels describe what is visible in the ARKit signal, not physiological ground truth.
 
 ```bash
-# Independent labels (suggestions hidden): use for trials kept for evaluation
-python3 scripts/annotate_okn.py trials/<name>/<name>.csv --annotator AA
-# Development labels: velocity-peak suggestions (≥ 20 deg/s, NOT a validated threshold)
-python3 scripts/annotate_okn.py trials/<name>/<name>.csv --annotator AA --assisted
+# One window for a whole split of the Pilot 01 plan (analysis/annotations/plan.csv)
+python3 scripts/annotate_okn.py --split evaluation --annotator AA             # suggestions never shown
+python3 scripts/annotate_okn.py --split development --annotator AA --assisted # velocity-peak suggestions (≥ 20 deg/s, NOT validated)
+# Or any recordings, in the order given
+python3 scripts/annotate_okn.py trials/<name>/<name>.csv [...] --annotator AA
 ```
+
+The window opens at the first trial you haven't marked reviewed (`--start A3`
+picks one by Pilot ID, queue number or `trial_id`). `←` / `→` save and move to the
+previous / next trial without wrapping; if a save fails you stay on the trial
+with your edits. Closing the window also saves. Evaluation trials never compute
+or show suggestions, even with `--assisted` or in a mixed queue.
 
 | Control | Action |
 |---|---|
+| `←` `→` (or the buttons) | save, then previous / next trial |
 | left-click / right-click | add an event at the nearest sample / remove the nearest event |
-| `1` `2` `3` | label for the next clicks: `fast_phase` / `uncertain` / `artifact` |
+| `1` `2` `3` | label for the next clicks: `fast_phase` / `uncertain` / `artifact` (resets to fast phase on each trial) |
 | `z` | undo |
-| `t`, `y` | show/hide suggestions, accept the ones in view (assisted only) |
-| `x` | mark the trial **completely reviewed** (needed for scoring, including trials with 0 resets) |
+| `x` | mark the trial **completely reviewed** (needed for scoring, including trials with 0 resets); never set automatically |
 | `s` | save to `analysis/annotations/events.csv` and `reviews.csv` |
+| `+` `-`, `shift+←` `shift+→`, `r` | zoom at the cursor, scroll in time, reset zoom |
+| `h` | show / hide the help panel |
+| `t`, `y` | show/hide suggestions, accept the ones in view (assisted, non-evaluation trials only) |
 
-Zoom and pan use the toolbar. Opening the same recording again loads its saved
-labels for editing. Events within 50 ms of an existing event are refused as
-duplicates. Then:
+The toolbar's zoom and pan tools also work. Events within 50 ms of an existing
+event are refused as duplicates. Then:
 
 ```bash
 python3 scripts/evaluate_okn.py                     # ±100 ms one-to-one matching
