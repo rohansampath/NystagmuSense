@@ -43,7 +43,8 @@ MAX_BODY_BYTES = 10 * 1024 * 1024
 # File-name contract 1, shared with RecordingName in ExperimentNaming.swift and
 # checked on both sides against tests/fixtures/recording_names.json:
 #   {TEST}_T{###}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}
-#   e.g. DIR_T001_OKN_RIGHT_20261104_143022 (TEST: A-Z, 0-9, '-', 1-16 chars);
+#   e.g. DIR_T001_OKN_RIGHT_20261104_143022 (TEST: A-Z, 0-9, '-', 1-16 chars;
+#   a trial with a participant is {code}-{participant}, e.g. P03-P01_T041_...);
 # or the legacy SessionRecorder.fileStem NS_<yyyyMMdd-HHmmss>_<8 hex>[_<mode>].
 NAME_CONTRACT = 1
 STEM_RE = re.compile(
@@ -82,6 +83,15 @@ def parse_recording(body):
         raise UploadError(400, "metadata is not valid JSON")
     if not isinstance(meta, dict):
         raise UploadError(400, "metadata must be a JSON object")
+    # Sidecars name their own recording (schema 4+); a mismatch means the pair
+    # was mislabelled, so it is refused rather than filed under the wrong trial.
+    if "recordingName" in meta and meta["recordingName"] != stem:
+        raise UploadError(400, "metadata recordingName does not match the file name", "mismatched_metadata",
+                          detail=repr(str(meta["recordingName"])[:80]))
+    if meta.get("participantID") is not None and \
+            not stem.startswith(f"{meta.get('experimentID')}-{meta['participantID']}_"):
+        raise UploadError(400, "metadata participantID does not match the file name", "mismatched_metadata",
+                          detail=repr(str(meta["participantID"])[:20]))
     return stem, csv_text, json_text
 
 

@@ -144,7 +144,9 @@ struct SessionRecorder {
             fixationDot: viewport.flatMap { FixationDot(stimulus: stimulus, viewport: $0) },
             experimentID: name?.experimentID,
             testTypeName: name.flatMap { TestType(rawValue: $0.experimentID)?.displayName },
+            participantID: name?.participantID,
             trialNumber: name?.trialNumber,
+            directionCode: name?.directionCode,
             recordingName: recordingStem,
             faceDistance: FaceDistanceSummary(
                 distancesCm: samples.map { $0.gaze.faceDistanceMeters.map { Double($0) * 100 } },

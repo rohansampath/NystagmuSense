@@ -19,6 +19,7 @@ enum TestType: String, CaseIterable, Identifiable {
     case fixationControl = "FIX"
     case distance        = "DIST"
     case pilot02         = "P02"
+    case pilot03         = "P03"
 
     var id: String { rawValue }
     var code: String { rawValue }
@@ -33,8 +34,39 @@ enum TestType: String, CaseIterable, Identifiable {
         case .fixationControl: return "Fixation Control"
         case .distance:        return "Distance Test"
         case .pilot02:         return "Pilot 02"
+        case .pilot03:         return "Pilot 03"
         }
     }
+
+    /// Pilot 03 recordings must say who was recorded; no recording starts without it.
+    var requiresParticipant: Bool { self == .pilot03 }
+
+    /// Pilot 03 keeps a constant white background (black bars, full contrast)
+    /// instead of the default white → black fade. Nil keeps the fade.
+    var fixedBackgroundGray: Double? { self == .pilot03 ? 1 : nil }
+}
+
+/// Pseudonymous participant codes. Names are never stored on the phone.
+enum Participant: String, CaseIterable, Identifiable {
+    case p01 = "P01"
+    case p02 = "P02"
+
+    var id: String { rawValue }
+}
+
+/// Everything about a trial chosen on the menu before it starts. Captured
+/// once when the trial screen opens, so a later menu change can't relabel it.
+struct TrialSelection: Equatable {
+    let testType: TestType
+    /// Only kept for test types that need one.
+    let participant: Participant?
+
+    init(testType: TestType, participant: Participant?) {
+        self.testType = testType
+        self.participant = testType.requiresParticipant ? participant : nil
+    }
+
+    var isComplete: Bool { !testType.requiresParticipant || participant != nil }
 }
 
 /// File-name contract, version 1, shared with scripts/receive_recordings.py
@@ -44,35 +76,47 @@ enum TestType: String, CaseIterable, Identifiable {
 ///     {TEST}_T{trial ≥3 digits}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}
 ///
 /// e.g. `DIR_T001_OKN_RIGHT_20261104_143022`. TEST is upper-case letters,
-/// digits or "-", 1–16 characters. Built only from the trial's own settings
-/// (never inferred from gaze); the folder, CSV and JSON share it.
+/// digits or "-", 1–16 characters: the test-type code, followed by
+/// `-{participant}` when the trial has one (`P03-P01_T041_OKN_LEFT_…`).
+/// Built only from the trial's own settings (never inferred from gaze); the
+/// folder, CSV and JSON share it.
 struct RecordingName: Equatable {
     /// Bump together with the receiver's NAME_CONTRACT when the format changes.
     static let contractVersion = 1
 
     let experimentID: String
+    /// Pseudonymous code such as P01; nil for test types without participants.
+    let participantID: String?
     let trialNumber: Int
     let mode: StimulusConfig.TrialMode
     /// Nil when the stripes never move (written as NONE).
     let direction: StimulusConfig.Direction?
     let startedAt: Date
 
-    init(experimentID: String, trialNumber: Int, stimulus: StimulusConfig, startedAt: Date) {
-        self.experimentID = experimentID
-        self.trialNumber  = trialNumber
+    init(experimentID: String, participantID: String? = nil, trialNumber: Int, stimulus: StimulusConfig,
+         startedAt: Date) {
+        self.experimentID  = experimentID
+        self.participantID = participantID
+        self.trialNumber   = trialNumber
         self.mode         = stimulus.trialMode
         self.direction    = stimulus.isMoving ? stimulus.direction : nil
         self.startedAt    = startedAt
     }
 
-    var stem: String {
-        let dir: String
+    /// First field of the stem: `P03-P01`, or just the code without a participant.
+    var testField: String { participantID.map { "\(experimentID)-\($0)" } ?? experimentID }
+
+    /// Direction field of the stem; NONE when the stripes never move.
+    var directionCode: String {
         switch direction {
-        case .rightward: dir = "RIGHT"
-        case .leftward:  dir = "LEFT"
-        case nil:        dir = "NONE"
+        case .rightward: return "RIGHT"
+        case .leftward:  return "LEFT"
+        case nil:        return "NONE"
         }
-        return "\(experimentID)_\(Self.trialLabel(trialNumber))_\(mode.nameCode)_\(dir)_\(Self.utc.string(from: startedAt))"
+    }
+
+    var stem: String {
+        "\(testField)_\(Self.trialLabel(trialNumber))_\(mode.nameCode)_\(directionCode)_\(Self.utc.string(from: startedAt))"
     }
 
     static func trialLabel(_ n: Int) -> String {
@@ -89,11 +133,12 @@ struct RecordingName: Equatable {
     }()
 }
 
-/// Selected test type and one trial counter shared by all test types (so
-/// numbers follow recording order on this phone), in UserDefaults so both
-/// survive app restarts.
+/// Selected test type, participant and one trial counter shared by all test
+/// types (so numbers follow recording order on this phone), in UserDefaults
+/// so they survive app restarts.
 struct ExperimentLog {
     static let testTypeKey = "experiment.testType"
+    static let participantKey = "experiment.participant"
     private static let nextTrialKey = "recording.nextTrial"
     /// Per-experiment counters written by the earlier free-text ID version.
     private static let legacyCounterPrefix = "experiment.nextTrial."
@@ -103,6 +148,11 @@ struct ExperimentLog {
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
     var testType: TestType { TestType(rawValue: defaults.string(forKey: Self.testTypeKey) ?? "") ?? .general }
+
+    /// Last participant chosen on the menu; nil until one is picked.
+    var participant: Participant? { Participant(rawValue: defaults.string(forKey: Self.participantKey) ?? "") }
+
+    var selection: TrialSelection { TrialSelection(testType: testType, participant: participant) }
 
     /// The number the next saved recording gets. Never below any number already
     /// used on this phone, including by the earlier per-experiment counters.

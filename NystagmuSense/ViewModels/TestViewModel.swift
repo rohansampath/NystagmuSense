@@ -65,6 +65,9 @@ final class TestViewModel: ObservableObject {
 
     let stimulus: StimulusEngine
     let duration: TimeInterval
+    /// Test type and participant, fixed when this trial screen was created
+    /// (before recording); the saved name and metadata use exactly these.
+    let selection: TrialSelection
 
     private let provider: GazeProvider
     private let startupTimeout: TimeInterval
@@ -86,6 +89,7 @@ final class TestViewModel: ObservableObject {
          outputDirectory: URL = SessionRecorder.defaultDirectory,
          uploader: @escaping () -> RecordingUploading? = RecordingUploader.fromSavedSettings,
          experiment: ExperimentLog = ExperimentLog(),
+         selection: TrialSelection? = nil,
          now: @escaping () -> TimeInterval = CACurrentMediaTime) {
         self.provider        = provider
         self.stimulus        = stimulus
@@ -94,6 +98,7 @@ final class TestViewModel: ObservableObject {
         self.outputDirectory = outputDirectory
         self.makeUploader    = uploader
         self.experiment      = experiment
+        self.selection       = selection ?? experiment.selection
         self.now             = now
     }
 
@@ -102,7 +107,7 @@ final class TestViewModel: ObservableObject {
     /// Turns the camera on and shows the face distance before a trial. Uses the
     /// same provider/ARSession that then records.
     func startPositioning() {
-        guard phase == .idle, isLandscape else { return }
+        guard phase == .idle, isLandscape, selectionIsComplete() else { return }
         startCamera(as: .positioning)
     }
 
@@ -114,7 +119,7 @@ final class TestViewModel: ObservableObject {
     func start(bypassDistanceCheck: Bool = false) {
         switch phase {
         case .idle:
-            guard isLandscape else { return }
+            guard isLandscape, selectionIsComplete() else { return }
             distanceCheck = .notPerformed
             startCamera(as: .starting)
         case .positioning:
@@ -185,7 +190,8 @@ final class TestViewModel: ObservableObject {
         // Named once; Retry Export reuses the name. The counter advances only
         // when the files are saved locally (export), not on upload.
         if recorder?.name == nil, let startedAt = recorder?.startedAt {
-            recorder?.name = RecordingName(experimentID: experiment.testType.code,
+            recorder?.name = RecordingName(experimentID: selection.testType.code,
+                                           participantID: selection.participant?.rawValue,
                                            trialNumber: experiment.nextTrialNumber,
                                            stimulus: stimulus.config, startedAt: startedAt)
         }
@@ -318,6 +324,16 @@ final class TestViewModel: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    /// A Pilot 03 trial without a participant is never recorded, so it can't
+    /// be saved or uploaded under an incomplete name.
+    private func selectionIsComplete() -> Bool {
+        guard selection.isComplete else {
+            phase = .failed("Choose the participant on the menu before recording a \(selection.testType.displayName) trial.")
+            return false
+        }
+        return true
+    }
 
     private func fail(_ error: GazeTrackingError) {
         stopCapture()
