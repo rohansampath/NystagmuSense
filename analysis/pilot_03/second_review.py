@@ -96,6 +96,12 @@ def main(argv=None):
     trial_ids = [r["trial_id"] for r in annotate_okn._read_rows(args.trials)]
     rev_a, ev_a = load(args.first, args.first_id)
     rev_b, ev_b = load(args.second, args.second_id)
+    if args.first.resolve() == args.second.resolve() and args.first_id == args.second_id:
+        ap.error("agreement requires two different annotators")
+    for reviews in (rev_a, rev_b):
+        for tid in trial_ids:
+            if tid in reviews and reviews[tid]["annotation_method"] != "manual":
+                ap.error(f"{tid}: blinded agreement requires independent manual labels")
     total = [0, 0, 0]
     print(f"{'trial':42} matched {args.first_id}-only {args.second_id}-only agreement")
     lines = []

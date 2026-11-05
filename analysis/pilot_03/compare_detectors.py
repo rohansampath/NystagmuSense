@@ -49,19 +49,21 @@ IMPROVEMENTS = [0.3, 0.5, 0.7, 0.85, 0.9, 0.95]
 TIE = 0.01
 
 
-def load_trials(labels_dir, trials_dir, manifest):
+def load_trials(labels_dir, trials_dir, manifest, annotator=None):
     include = evaluate_okn.load_manifest(manifest, "development")
-    reviews = {r["trial_id"]: r for r in annotate_okn._read_rows(Path(labels_dir) / "reviews.csv")}
+    reviews = evaluate_okn.development_reviews(labels_dir, include, annotator)
     events = annotate_okn._read_rows(Path(labels_dir) / "events.csv")
     trials = []
     for tid, row in sorted(include.items()):
         if reviews.get(tid, {}).get("status") != "complete":
             raise SystemExit(f"{tid} is not completely reviewed")
         path = evaluate_okn.find_recording(tid, trials_dir, reviews[tid])
+        if path is None:
+            raise ValueError(f"{tid}: recording not found")
         data = detect_okn.load_session(path)
         t = data["t_s"]
         trials.append(dict(trial_id=tid, row=row, data=data, duration=float(t[-1] - t[0]),
-                           events=[(float(e["event_time_s"]), e["label"]) for e in events if e["trial_id"] == tid],
+                           events=evaluate_okn.review_events(events, reviews[tid]),
                            expected=ov.expected_reset_direction(detect_okn.stimulus_direction(data))))
     return trials
 
@@ -369,13 +371,14 @@ def plot_examples(trials, cache, chosen, out):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--labels-dir", type=Path, required=True)
+    ap.add_argument("--annotator", help="independent annotator to score (required if multiple are present)")
     ap.add_argument("--trials-dir", type=Path, default=ROOT / "trials")
     ap.add_argument("--manifest", type=Path, default=Path(__file__).resolve().parent / "manifest.csv")
     ap.add_argument("--output-dir", type=Path, default=Path(__file__).resolve().parent / "comparison")
     args = ap.parse_args(argv)
     out = args.output_dir
     out.mkdir(parents=True, exist_ok=True)
-    trials = load_trials(args.labels_dir, args.trials_dir, args.manifest)
+    trials = load_trials(args.labels_dir, args.trials_dir, args.manifest, args.annotator)
     cache = Cache(trials)
     by_part = {p: [tr for tr in trials if tr["row"]["participant"] == p] for p in ("P01", "P02")}
     ids = {p: {tr["trial_id"] for tr in v} for p, v in by_part.items()}
