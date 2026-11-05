@@ -3,6 +3,8 @@
 
 Usage:
     python3 scripts/detect_okn.py path/to/NS_....csv [--plot out.png]
+    python3 scripts/detect_okn.py path/to/NS_....csv --method hybrid [--plot hybrid.png]
+    python3 scripts/compare_okn.py path/to/NS_....csv --output-dir comparison
 
 Baseline, interpretable pipeline (no machine learning) on raw, uncalibrated
 ARKit signals:
@@ -37,6 +39,11 @@ from pathlib import Path
 
 import numpy as np
 from scipy.signal import savgol_filter
+
+# The opt-in hybrid imports the shared baseline helpers. Give command-line
+# execution the canonical module name too, preserving one SessionError type.
+if __name__ == "__main__":
+    sys.modules["detect_okn"] = sys.modules[__name__]
 
 REQUIRED = ["t_s", "tracked", "left_dir_x", "left_dir_z", "right_dir_x", "right_dir_z"]
 OPTIONAL = ["blink_left", "blink_right", "stim_displacement_pt", "stim_bg_gray"]
@@ -348,7 +355,13 @@ def stimulus_direction(data):
 
 # ---------------------------------------------------------------- driver
 
-def analyse(data, p):
+def analyse(data, p, method="sg", hybrid_params=None):
+    # Keep the original SG implementation and its default output unchanged.
+    if method == "hybrid":
+        import hybrid_okn
+        return hybrid_okn.analyse(data, p, hybrid_params)
+    if method != "sg":
+        raise SessionError(f"unknown detector method: {method}")
     validate_params(p)
     t = data["t_s"]
     if len(t) < 2 or not np.all(np.isfinite(t)) or np.any(np.diff(t) <= 0):
@@ -388,6 +401,9 @@ def direction_name(d):
 
 
 def print_report(r, p):
+    if r.get("method") == "hybrid":
+        print("detector:          hybrid (raw-angle change points + slow-interval SG), experimental")
+        print("reset speed:       fitted segment slope; displayed reset velocity is raw frame difference")
     t, valid = r["t"], r["valid"]
     span = t[-1] - t[0]
     right = sum(f["direction"] > 0 for f in r["fast"])
@@ -480,7 +496,8 @@ def plot(r, p, out_path, title):
     ax2.plot(plot_t, np.insert(r["velocity"], gaps, np.nan), color="0.3", linewidth=0.9)
     for y in (p.fast_threshold, -p.fast_threshold):
         ax2.axhline(y, color="tab:red", linestyle="--", linewidth=0.8)
-    ax2.set_ylabel("SG velocity (deg/s)")
+    ax2.set_ylabel("slow SG / reset raw velocity (deg/s)" if r.get("method") == "hybrid"
+                   else "SG velocity (deg/s)")
     if has_background:
         axes[2].plot(plot_t, np.insert(r["background"], gaps, np.nan), color="tab:purple")
         axes[2].set_ylabel("scheduled background\nsRGB value")
@@ -497,13 +514,21 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("csv", help="session CSV exported from the app")
     ap.add_argument("--plot", metavar="PNG", help="save a diagnostic plot")
+    ap.add_argument("--method", choices=("sg", "hybrid"), default="sg",
+                    help="sg: unchanged baseline (default); hybrid: experimental segmentation + SG")
+    import hybrid_okn
+    for f in fields(hybrid_okn.HybridParams):
+        ap.add_argument("--cp-" + f.name.replace("_", "-"), type=float, default=f.default,
+                        help=f"hybrid only; default: {f.default}")
     for f in fields(Params):
         ap.add_argument("--" + f.name.replace("_", "-"), type=type(f.default), default=f.default,
                         help=f"default: {f.default}")
     args = ap.parse_args(argv)
     p = Params(**{f.name: getattr(args, f.name) for f in fields(Params)})
     try:
-        r = analyse(load_session(args.csv), p)
+        hp = hybrid_okn.HybridParams(**{f.name: getattr(args, "cp_" + f.name)
+                                       for f in fields(hybrid_okn.HybridParams)})
+        r = analyse(load_session(args.csv), p, method=args.method, hybrid_params=hp)
     except SessionError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -512,7 +537,10 @@ def main(argv=None):
     print(f"mode:              {mode}")
     print_report(r, p)
     if args.plot:
-        plot(r, p, args.plot, f"{Path(args.csv).name} · mode: {mode}")
+        title = f"{Path(args.csv).name} · mode: {mode}"
+        if args.method == "hybrid":
+            title += " · HYBRID (experimental)"
+        plot(r, p, args.plot, title)
         print(f"plot saved:        {args.plot}")
     return 0
 

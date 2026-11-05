@@ -79,8 +79,8 @@ def prf(tp, fp, fn):
     return precision, recall, f1
 
 
-def detector_predictions(csv_path):
-    r = detect_okn.analyse(detect_okn.load_session(csv_path), detect_okn.Params())
+def detector_predictions(csv_path, method="sg"):
+    r = detect_okn.analyse(detect_okn.load_session(csv_path), detect_okn.Params(), method=method)
     return [f["start"] for f in r["fast"]]
 
 
@@ -153,14 +153,20 @@ def main(argv=None):
     ap.add_argument("--trials-dir", type=Path, default=Path(__file__).resolve().parents[1] / "trials")
     ap.add_argument("--tolerance-ms", type=float, default=DEFAULT_TOLERANCE_S * 1000)
     ap.add_argument("--annotator")
+    ap.add_argument("--detector", choices=("sg", "hybrid", "both"), default="sg",
+                    help="detector to score on the same reviewed labels; default: sg")
     args = ap.parse_args(argv)
     if args.tolerance_ms <= 0:
         ap.error("--tolerance-ms must be positive")
-    scored, skipped = evaluate(args.labels_dir, args.trials_dir, args.tolerance_ms / 1000, args.annotator)
-    if not scored and not skipped:
-        print(f"no reviews found in {args.labels_dir}")
-        return 1
-    report(scored, skipped, args.tolerance_ms / 1000)
+    methods = ("sg", "hybrid") if args.detector == "both" else (args.detector,)
+    for method in methods:
+        scored, skipped = evaluate(args.labels_dir, args.trials_dir, args.tolerance_ms / 1000,
+                                   args.annotator, predict=lambda path: detector_predictions(path, method))
+        if not scored and not skipped:
+            print(f"no reviews found in {args.labels_dir}")
+            return 1
+        print(f"\nDetector: {method}{' (experimental)' if method == 'hybrid' else ' (baseline)'}")
+        report(scored, skipped, args.tolerance_ms / 1000)
     return 0
 
 

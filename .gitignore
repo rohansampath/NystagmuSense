@@ -8,3 +8,6 @@ xcuserdata/
 # this repository is public. Already-tracked trials stay tracked; share a new
 # trial deliberately with `git add -f trials/<name>`.
 trials/*/
+
+# Local detector comparison plots and summaries; raw sources stay untouched.
+analysis/hybrid_comparison/

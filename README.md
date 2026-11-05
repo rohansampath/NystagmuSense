@@ -438,6 +438,63 @@ Relevant validation precedent: [Sangi et al. (2015)](https://pmc.ncbi.nlm.nih.go
 compared detections with masked human annotations. Our provisional fit gates are
 an implementation choice and have not been validated by that study.
 
+### Experimental hybrid: raw-angle change points + SG
+
+The existing SG pipeline remains the default. A second, opt-in implementation
+is in `scripts/hybrid_okn.py`; it uses change-point segmentation to locate
+short, steep resets in the **raw angle**, then computes SG velocity only within
+the slow intervals between resets. Identified reset samples never enter those
+SG windows. Both detectors reuse the same blink/gap masks, eye-angle sign,
+slow-fit quality gates, beat pairing and candidate-window logic. Neither runs
+in the iOS app, and existing Pilot 01 outputs are untouched.
+
+```bash
+# Original method (also the default when --method is omitted)
+python3 scripts/detect_okn.py path/to/recording.csv --method sg --plot sg.png
+# Alternative method
+python3 scripts/detect_okn.py path/to/recording.csv --method hybrid --plot hybrid.png
+# Run BOTH on identical inputs: side-by-side PNGs + reproducible summary.json
+python3 scripts/compare_okn.py path/to/recording.csv --output-dir analysis/hybrid_comparison
+# Batch comparison (use explicit paths if only some trials should be included)
+python3 scripts/compare_okn.py trials/*/*.csv --output-dir analysis/hybrid_comparison
+# Once human labels exist: evaluate both against the SAME complete reviews
+python3 scripts/evaluate_okn.py --detector both
+```
+
+The comparison JSON includes source CSV checksums, parameter sets, reset times
+and durations, accepted slow-phase and beat counts, candidate windows, and median
+beat SPV. These generated comparisons stay git-ignored. `--no-plots` writes only
+JSON. Evaluation uses each method's defaults and keeps manual and assisted
+labels separate; annotation suggestions themselves remain unchanged.
+
+**Segmentation model.** Within each contiguous valid run, dynamic programming
+minimises raw-angle squared error plus a penalty per additional line segment.
+Line segments join at observed samples, allowing even a one-camera-interval
+reset. The penalty is `6 × noise_sigma² × log(sample_count)` by default. Noise
+is estimated robustly from three-sample interpolation residuals at the actual
+timestamps, with a 0.05° floor. This is a constrained polyline model, inspired
+by penalised piecewise-linear segmentation, rather than an implementation of
+[CPOP](https://www.jstatsoft.org/article/view/v109i07) (which optimises knot heights).
+It uses O(n²) time and O(n) working memory per valid run, suitable for the current
+short offline recordings; long continuous recordings will cost more.
+
+Adjacent same-direction steep segments are combined. A hybrid reset must exceed
+the **same 40°/s speed gate** as the SG baseline, have amplitude ≥ 0.5°, and last
+≤ 150 ms. The extra gates suppress tiny/noisy excursions and long fast ramps;
+they are provisional. Its report's `peak_velocity` is the steepest segment slope,
+not an estimated physiological peak. Hybrid plots show SG velocity in slow
+intervals and unsmoothed frame differences inside accepted resets, with the
+piecewise-linear fit in orange on comparison plots.
+
+Hybrid-specific flags are `--cp-penalty-scale`, `--cp-noise-floor-deg`,
+`--cp-min-reset-amplitude-deg`, and `--cp-max-reset-s`. The existing
+`--fast-threshold` applies to both methods in a comparison. All defaults are
+experimental, not fitted to the available trial recordings. A larger penalty
+can miss resets; a smaller one can oversegment noise. Resets with sampled slopes
+below the speed gate, low amplitudes, or insufficient camera samples can still
+be missed. More reset candidates do **not** establish better accuracy: compare
+precision/recall and fixation false detections on held-out human-labelled trials.
+
 ## Relationship to the original paper's score
 
 The original project paper's Methods (pp. 7–8, *Contrast Sensitivity Function Test

@@ -174,6 +174,16 @@ The current offline prototype is `scripts/detect_okn.py`; see the README for
 commands, timestamp/gap handling and known specificity limits. It has not been
 validated as a physiological OKN detector or ported into the iOS recording flow.
 
+The default `sg` method is preserved. The opt-in `hybrid` method delegates to
+`scripts/hybrid_okn.py`: penalised piecewise-linear segmentation of raw angle
+locates resets, then SG runs separately between accepted reset regions. Shared
+validity masks, slow-fit gates, beat pairing and window logic stay in
+`detect_okn.py`. `scripts/compare_okn.py` runs both methods on identical inputs
+and exports diagnostic PNGs plus a JSON summary with parameters/checksums.
+`scripts/evaluate_okn.py --detector both` scores both against the same complete
+human reviews. Existing analysis snapshots and annotation suggestions retain
+the original SG path.
+
 Future app input: `[RecordedSample]` (from `SessionRecorder.samples`) or the exported CSV.
 Each sample has `t`, the raw `EyeMovementSample`, and the scheduled
 `StimulusSnapshot`. Planned pipeline, as pure Swift functions or structs in
