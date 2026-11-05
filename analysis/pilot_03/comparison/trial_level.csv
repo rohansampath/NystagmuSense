@@ -1,0 +1,10 @@
+detector,condition,trials_with_okn_interval,n_trials
+SG 40,OKN,1,12
+SG 40,FIXMOVE,0,8
+SG 40,FIXSTILL,0,8
+SG 24,OKN,2,12
+SG 24,FIXMOVE,0,8
+SG 24,FIXSTILL,0,8
+global segmentation,OKN,2,12
+global segmentation,FIXMOVE,0,8
+global segmentation,FIXSTILL,0,8

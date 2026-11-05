@@ -1,0 +1,11 @@
+sg_threshold,condition,labels,missed_by_sg_candidates,of_those_found_by_D
+10,OKN,100,0,0
+10,FIXMOVE,60,14,1
+20,OKN,100,8,3
+20,FIXMOVE,60,49,13
+22,OKN,100,13,6
+22,FIXMOVE,60,50,14
+24,OKN,100,17,9
+24,FIXMOVE,60,51,15
+40,OKN,100,51,40
+40,FIXMOVE,60,56,18
