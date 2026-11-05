@@ -11,3 +11,4 @@ trials/*/
 
 # Local detector comparison plots and summaries; raw sources stay untouched.
 analysis/hybrid_comparison/
+analysis/pilot_03/label_flags.csv
