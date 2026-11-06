@@ -67,6 +67,40 @@ struct SessionRecorderTests {
         #expect(r.droppedOutOfOrder == 1)
     }
 
+    @Test func duplicateTimestampsCannotMakeAnUnreadableCSV() {
+        var r = makeRecorder()
+        let first = r.record(Fixture.tracked(at: 101))
+        let duplicate = r.record(Fixture.tracked(at: 101))
+        let next = r.record(Fixture.tracked(at: 102))
+        #expect(first && !duplicate && next)
+        #expect(r.samples.map(\.t) == [1, 2])
+        #expect(r.droppedOutOfOrder == 1)
+    }
+
+    @Test func exportRetryIsIdenticalAndConflictsNeverOverwrite() throws {
+        var r = makeRecorder()
+        r.record(Fixture.tracked(at: 101))
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let files = try r.export(to: dir, device: device)
+        #expect(try r.export(to: dir, device: device) == files)
+        let original = try Data(contentsOf: files.csv)
+        r.record(Fixture.tracked(at: 102))
+        #expect(throws: RecordingError.conflictingRecording) { try r.export(to: dir, device: device) }
+        #expect(try Data(contentsOf: files.csv) == original)
+    }
+
+    @Test func encodingFailurePublishesNeitherFile() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var config = StimulusConfig()
+        config.speedPointsPerSecond = .infinity
+        var invalid = SessionRecorder(startUptime: 100, duration: 10, stimulus: StimulusEngine(config: config))
+        invalid.record(Fixture.tracked(at: 101))
+        #expect(throws: (any Error).self) { try invalid.export(to: dir, device: device) }
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent(invalid.recordingStem).path))
+    }
+
     @Test func statsAndUntrackedSamples() {
         var r = makeRecorder()
         r.record(Fixture.tracked(at: 100))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Flag Pilot 03 labels for human review (never edits them).
+"""Flag Pilot 03 development labels for human review (never edits them).
 
     python3 analysis/pilot_03/check_labels.py --labels-dir <annotations_p03> [--trials-dir trials]
 
@@ -15,7 +15,8 @@ largest |velocity| within -100..+150 ms of the click:
 - still:     any fast_phase in a still-stripe trial (allowed, but check it
              isn't an isolated saccade);
 - unreviewed / in_progress trials in the manifest are listed too.
-Writes label_flags.csv next to this script.
+Writes label_flags.csv next to this script. Evaluation requires both
+--split evaluation and --allow-evaluation; it is never inspected by default.
 """
 
 import argparse
@@ -63,17 +64,26 @@ def main(argv=None):
     ap.add_argument("--trials-dir", type=Path, default=ROOT / "trials")
     ap.add_argument("--manifest", type=Path, default=HERE / "manifest.csv")
     ap.add_argument("--output", type=Path, default=HERE / "label_flags.csv")
+    ap.add_argument("--split", choices=("development", "evaluation"), default="development")
+    ap.add_argument("--allow-evaluation", action="store_true",
+                    help="inspect held-out labels only after the detector is frozen")
+    ap.add_argument("--annotator", help="independent annotator whose labels should be checked")
     args = ap.parse_args(argv)
-    manifest = [r for r in csv.DictReader(open(args.manifest)) if r["eligibility"] in ("primary", "extra")]
+    if args.split == "evaluation" and not args.allow_evaluation:
+        ap.error("the evaluation split is held out; --allow-evaluation is required")
+    with args.manifest.open(newline="") as f:
+        manifest = [r for r in csv.DictReader(f) if r["eligibility"] == "primary" and r["split"] == args.split]
     events = annotate_okn._read_rows(args.labels_dir / "events.csv")
-    reviews = {r["trial_id"]: r["status"] for r in annotate_okn._read_rows(args.labels_dir / "reviews.csv")}
+    import evaluate_okn
+    reviews = evaluate_okn.development_reviews(args.labels_dir, {r["trial_id"]: r for r in manifest}, args.annotator)
     rows = []
     for m in manifest:
         tid = m["trial_id"]
-        status = reviews.get(tid, "not opened")
+        review = reviews.get(tid)
+        status = review["status"] if review else "not opened"
         if status != "complete":
             rows.append(dict(trial_id=tid, split=m["split"], time_s="", flag="unreviewed", detail=status))
-        times = [float(e["event_time_s"]) for e in events if e["trial_id"] == tid and e["label"] == "fast_phase"]
+        times = [t for t, label in evaluate_okn.review_events(events, review) if label == "fast_phase"] if review else []
         if times:
             signal = annotate_okn.load_signal(args.trials_dir / tid / f"{tid}.csv")
             for x, flag, detail in flags_for_trial(signal, times, m["direction"]):

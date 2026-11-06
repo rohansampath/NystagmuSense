@@ -71,6 +71,7 @@ DEFAULT_LABELS_DIR = Path(__file__).resolve().parents[1] / "analysis" / "annotat
 DEFAULT_TRIALS_DIR = Path(__file__).resolve().parents[1] / "trials"
 # Which trials are held out for evaluation; the order is the annotation order.
 PLAN_CSV = DEFAULT_LABELS_DIR / "plan.csv"
+P03_MANIFEST = DEFAULT_LABELS_DIR.parent / "pilot_03" / "manifest.csv"
 SPLITS = ("evaluation", "development")
 CONDITIONS = {"okn": "OKN (watch stripes)", "fixationMovingStripes": "fixation dot + moving stripes",
               "fixationStillStripes": "fixation dot + still stripes"}
@@ -214,6 +215,7 @@ def propose_candidates(t, velocity, valid, min_velocity=SUGGEST_MIN_VELOCITY,
 def load_plan(path=PLAN_CSV):
     """trial_id → plan row (split, order, pilot_id, note). Empty if no plan."""
     rows = _read_rows(path)
+    rows = [r for r in rows if "eligibility" not in r or r["eligibility"] == "primary"]
     for r in rows:
         if r["split"] not in SPLITS:
             raise ValueError(f"unknown split {r['split']!r} in {path}")
@@ -222,7 +224,8 @@ def load_plan(path=PLAN_CSV):
 
 def split_queue(split, trials_dir, plan):
     """CSV paths of one split in plan order. Every recording must exist."""
-    rows = sorted((r for r in plan.values() if r["split"] == split), key=lambda r: int(r["order"]))
+    rows = sorted((r for r in plan.values() if r["split"] == split),
+                  key=lambda r: int(r.get("order") or r["trial_number"]))
     if not rows:
         raise ValueError(f"no trials are assigned to the {split} split in {PLAN_CSV.name}")
     paths = [Path(trials_dir) / r["trial_id"] / f"{r['trial_id']}.csv" for r in rows]
@@ -299,6 +302,7 @@ class Annotator:
         self.labels_dir = Path(labels_dir)
         self.assisted = assisted
         self.plan = load_plan() if plan is None else plan
+        self.p03_plan = load_plan(P03_MANIFEST)
         self.statuses = review_statuses(labels_dir, annotator)
         self.index = None
         self.show_help = True
@@ -329,7 +333,11 @@ class Annotator:
         except (detect_okn.SessionError, ValueError, OSError) as e:
             self.notify(f"could not open {trial_id}: {e}", "error")
             return False
-        plan_row = self.plan.get(trial_id) or {}
+        # Direct CSV queues still honour the frozen P03 split, even when the
+        # caller left the older Pilot 01 annotation plan selected.
+        plan_row = self.plan.get(trial_id) or self.p03_plan.get(trial_id) or {}
+        if self.p03_plan.get(trial_id, {}).get("split") == "evaluation":
+            plan_row = {**plan_row, "split": "evaluation"}
         self.index, self.csv_path, self.trial_id, self.sig, self.mode = i, path, trial_id, sig, mode
         self.split, self.pilot_id = plan_row.get("split"), plan_row.get("pilot_id")
         self.direction = stimulus_direction(path)
@@ -722,6 +730,8 @@ def main(argv=None):
     ap.add_argument("csv", nargs="*", help="session CSV(s) exported from the app, annotated in the order given")
     ap.add_argument("--split", choices=SPLITS,
                     help=f"annotate every recording of this split in analysis/annotations/{PLAN_CSV.name}")
+    ap.add_argument("--plan", type=Path, default=PLAN_CSV,
+                    help="annotation plan or frozen manifest (e.g. analysis/pilot_03/manifest.csv)")
     ap.add_argument("--annotator", required=True, help="your initials, e.g. AA")
     ap.add_argument("--assisted", action="store_true",
                     help="allow detector-derived suggestions (development labels only; "
@@ -735,7 +745,7 @@ def main(argv=None):
     if bool(args.csv) == bool(args.split):
         ap.error("give either CSV path(s) or --split, not both")
     try:
-        plan = load_plan()
+        plan = load_plan(args.plan)
         queue = split_queue(args.split, args.trials_dir, plan) if args.split else [Path(p) for p in args.csv]
         start = resolve_start(queue, plan, args.start) if args.start else None
         if args.split == "evaluation" and args.assisted:
