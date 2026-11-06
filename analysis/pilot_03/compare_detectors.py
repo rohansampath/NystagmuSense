@@ -72,7 +72,8 @@ def score(trials, predictions):
     """predictions: {trial_id: [start times]} → per-trial score dicts with grouping keys."""
     out = []
     for tr in trials:
-        s = evaluate_okn.score_trial(tr["events"], predictions[tr["trial_id"]], TOL, artifacts="exclude")
+        s = evaluate_okn.score_manifest_trial(tr["events"], predictions[tr["trial_id"]],
+                                              tr["row"]["condition"], TOL, artifacts="exclude")
         s.update(trial_id=tr["trial_id"], duration_s=tr["duration"], participant=tr["row"]["participant"],
                  condition=tr["row"]["condition"], direction=tr["row"]["direction"], mode="")
         out.append(s)

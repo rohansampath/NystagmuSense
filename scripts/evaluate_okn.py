@@ -96,9 +96,29 @@ def prf(tp, fp, fn):
     return precision, recall, f1
 
 
-def detector_predictions(csv_path, method="sg"):
-    r = detect_okn.analyse(detect_okn.load_session(csv_path), detect_okn.Params(), method=method)
-    return [f["start"] for f in r["fast"]]
+def score_manifest_trial(events, predictions, condition, tolerance=DEFAULT_TOLERANCE_S, artifacts="false-positive"):
+    """Pilot 03 still-stripe controls contribute false alarms, never true OKN resets."""
+    if condition == "FIXSTILL":
+        events = [(t, label) for t, label in events if label != "fast_phase"]
+    return score_trial(events, predictions, tolerance, artifacts)
+
+
+def detector_predictions(csv_path, method="sg", threshold=None):
+    data = detect_okn.load_session(csv_path)
+    threshold = (22 if method == "sg-direction" else 40) if threshold is None else threshold
+    r = detect_okn.analyse(data, detect_okn.Params(fast_threshold=threshold),
+                           method="sg" if method == "sg-direction" else method)
+    fast = r["fast"]
+    if method == "sg-direction":
+        import okn_variants
+        direction = detect_okn.stimulus_direction(data)
+        displacement = data.get("stim_displacement_pt")
+        if displacement is None or not all(math.isfinite(x) for x in displacement):
+            raise ValueError("sg-direction requires finite recorded stimulus displacement")
+        if direction == 0 and any(x != displacement[0] for x in displacement):
+            raise ValueError("sg-direction cannot score a reversing stimulus")
+        fast = okn_variants.direction_filter(fast, okn_variants.expected_reset_direction(direction))
+    return [f["start"] for f in fast]
 
 
 def find_recording(trial_id, trials_dir, review):
@@ -166,8 +186,8 @@ def evaluate(labels_dir, trials_dir, tolerance=DEFAULT_TOLERANCE_S, annotator=No
         evs = [(float(e["event_time_s"]), e["label"]) for e in events
                if e["trial_id"] == rev["trial_id"] and e["annotator_id"] == rev["annotator_id"]]
         t = detect_okn.load_session(path)["t_s"]
-        s = score_trial(evs, predict(path), tolerance, artifacts)
         row = (include or {}).get(rev["trial_id"], {})
+        s = score_manifest_trial(evs, predict(path), row.get("condition"), tolerance, artifacts)
         s.update(trial_id=rev["trial_id"], annotator=rev["annotator_id"],
                  method=rev["annotation_method"], mode=detect_okn.load_trial_mode(path),
                  duration_s=float(t[-1] - t[0]), participant=row.get("participant", ""),
@@ -204,7 +224,8 @@ def group_rows(scored):
     return out
 
 
-TRIAL_FIELDS = ["trial_id", "participant", "condition", "direction", "split", "method", "duration_s", "n_ref",
+TRIAL_FIELDS = ["trial_id", "participant", "condition", "direction", "split", "annotator", "method",
+                "detector", "fast_threshold", "duration_s", "n_ref",
                 "n_pred", "tp", "fp", "fn", "excluded_uncertain", "excluded_artifact", "mean_abs_offset_ms",
                 "precision", "recall", "f1"]
 
@@ -225,7 +246,7 @@ def fmt(v):
 
 
 def report(scored, skipped, tolerance):
-    print(f"tolerance ±{tolerance * 1000:.0f} ms; predictions = detect_okn fast-phase starts (default params)")
+    print(f"tolerance ±{tolerance * 1000:.0f} ms; predictions = detector fast-phase starts")
     print("labels are ARKit-visible events, not physiological ground truth\n")
     print(f"{'trial':40} {'annot':6} {'method':8} {'mode':22} TP FP FN unc  P     R     F1")
     for s in sorted(scored, key=lambda s: (s["method"], s["trial_id"])):
@@ -263,8 +284,10 @@ def main(argv=None):
     ap.add_argument("--trials-dir", type=Path, default=Path(__file__).resolve().parents[1] / "trials")
     ap.add_argument("--tolerance-ms", type=float, default=DEFAULT_TOLERANCE_S * 1000)
     ap.add_argument("--annotator")
-    ap.add_argument("--detector", choices=("sg", "hybrid", "both"), default="sg",
+    ap.add_argument("--detector", choices=("sg", "hybrid", "both", "sg-direction"), default="sg",
                     help="detector to score on the same reviewed labels; default: sg")
+    ap.add_argument("--fast-threshold", type=float,
+                    help="deg/s; default 40 for sg/hybrid, frozen candidate 22 for sg-direction")
     ap.add_argument("--manifest", type=Path, help="e.g. analysis/pilot_03/manifest.csv; requires --split")
     ap.add_argument("--split", choices=("development", "evaluation"))
     ap.add_argument("--allow-evaluation", action="store_true",
@@ -275,6 +298,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if not math.isfinite(args.tolerance_ms) or args.tolerance_ms <= 0:
         ap.error("--tolerance-ms must be finite and positive")
+    if args.fast_threshold is not None and (not math.isfinite(args.fast_threshold) or args.fast_threshold <= 0):
+        ap.error("--fast-threshold must be finite and positive")
     if bool(args.manifest) != bool(args.split):
         ap.error("--manifest and --split go together")
     if args.split == "evaluation" and not args.allow_evaluation:
@@ -283,17 +308,40 @@ def main(argv=None):
         include = load_manifest(args.manifest, args.split) if args.manifest else None
     except ValueError as e:
         ap.error(str(e))
+    if args.manifest is None:
+        held = {tid for tid, row in annotate_okn.load_plan(annotate_okn.P03_MANIFEST).items()
+                if row["split"] == "evaluation"}
+        reviews = annotate_okn._read_rows(args.labels_dir / "reviews.csv")
+        if any(r["trial_id"] in held and (args.annotator is None or r["annotator_id"] == args.annotator)
+               for r in reviews):
+            ap.error("Pilot 03 evaluation reviews found; select --manifest and --split explicitly")
     if args.split:
         print(f"split: {args.split} ({len(include)} primary trials in {args.manifest}); artifacts: {args.artifacts}")
     methods = ("sg", "hybrid") if args.detector == "both" else (args.detector,)
+    if args.output_csv:
+        sources = {args.labels_dir / "events.csv", args.labels_dir / "reviews.csv"}
+        if args.manifest:
+            sources.add(args.manifest)
+        for review in annotate_okn._read_rows(args.labels_dir / "reviews.csv"):
+            recording = find_recording(review["trial_id"], args.trials_dir, review)
+            if recording:
+                sources.update((recording, recording.with_suffix(".json")))
+        outputs = [args.output_csv] if len(methods) == 1 else [
+            args.output_csv.with_stem(f"{args.output_csv.stem}_{method}") for method in methods]
+        if {p.resolve() for p in outputs} & {p.resolve() for p in sources}:
+            ap.error("output would overwrite source labels, manifest or recording; choose another path")
     for method in methods:
+        threshold = args.fast_threshold if args.fast_threshold is not None else (22 if method == "sg-direction" else 40)
         scored, skipped = evaluate(args.labels_dir, args.trials_dir, args.tolerance_ms / 1000,
-                                   args.annotator, predict=lambda path: detector_predictions(path, method),
+                                   args.annotator, predict=lambda path: detector_predictions(path, method, threshold),
                                    include=include, artifacts=args.artifacts)
         if not scored and not skipped:
             print(f"no reviews found in {args.labels_dir}")
             return 1
-        print(f"\nDetector: {method}{' (experimental)' if method == 'hybrid' else ' (baseline)'}")
+        for row in scored:
+            row.update(detector=method, fast_threshold=threshold)
+        label = "baseline" if method == "sg" else "experimental"
+        print(f"\nDetector: {method} ({label}), fast threshold {threshold:g} deg/s")
         report(scored, skipped, args.tolerance_ms / 1000)
         if args.output_csv:
             out = args.output_csv if len(methods) == 1 else args.output_csv.with_stem(f"{args.output_csv.stem}_{method}")
