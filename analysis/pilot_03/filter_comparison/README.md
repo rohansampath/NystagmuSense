@@ -195,9 +195,28 @@ evaluation.**
 
 **On the BW+SG rule pass:** the pre-set rule technically favours BW+SG, but
 the margin is about 4 events. I don't consider that evidence of improvement.
-If you prefer to follow the rule to the letter, freeze BW+SG at 15 Hz,
-22 deg/s instead. Decide this *before* the evaluation split is scored, and
-record the decision.
+
+## Engineering decision (2026-11-08, before any held-out scoring)
+
+**The team chose SG + direction at 22 deg/s** as the detector for the
+Pilot 03 held-out evaluation.
+
+**This departs from the pre-declared replacement rule.** BW+SG (15 Hz,
+22 deg/s) met all three of the rule's conditions:
+- pooled F1 was 0.014 higher;
+- it was no worse for either participant;
+- its cross-participant F1 was 0.003 higher.
+
+**Why SG was kept anyway:**
+- The margin is 1 extra true positive and 4 fewer false positives across 28
+  recordings, against SG's 22 deg/s point.
+- Against SG's best grid point (F1 0.680), the gain is 0.008, inside the tie band.
+- Participant-level results are broadly comparable (F1 P01 0.62 vs 0.63; P02 0.71 vs 0.73).
+- SG is one stage with no extra parameter, and it is causal. BW+SG adds a
+  filter stage and a cutoff, and needs future samples as implemented.
+
+The decision was made on development results only. Every result above is
+unchanged.
 
 ## Reproduce
 
