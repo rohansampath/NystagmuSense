@@ -111,6 +111,7 @@ struct ExperimentNamingTests {
             (.blink, "BLINK", "Blink Test"), (.oknDetection, "OKNTEST", "OKN Detection"),
             (.direction, "DIR", "Direction Test"), (.fixationControl, "FIX", "Fixation Control"),
             (.distance, "DIST", "Distance Test"), (.pilot02, "P02", "Pilot 02"), (.pilot03, "P03", "Pilot 03"),
+            (.pilot04, "P04", "Pilot 04"),
         ]
         #expect(TestType.allCases.count == expected.count)
         for (type, code, name) in expected {
@@ -210,15 +211,55 @@ struct ExperimentNamingTests {
         }
     }
 
-    @Test func onlyPilot03NeedsAParticipantAndAFixedBackground() {
+    @Test func onlyPilots03And04NeedAParticipantAndAFixedBackground() {
         for type in TestType.allCases {
-            #expect(type.requiresParticipant == (type == .pilot03))
-            #expect(type.fixedBackgroundGray == (type == .pilot03 ? 1 : nil))
+            let pilot = type == .pilot03 || type == .pilot04
+            #expect(type.requiresParticipant == pilot)
+            #expect(type.fixedBackgroundGray == (pilot ? 1 : nil))
         }
+        #expect(TestType.pilot03.participants == [.p01, .p02])
+        #expect(TestType.pilot04.participants == [.p01, .p02, .p03])
+        #expect(TestType.pilot04.code == "P04")                     // digit zero, never "PO4"
+        #expect(Participant.allCases.map(\.rawValue) == ["P01", "P02", "P03"])
         #expect(!TrialSelection(testType: .pilot03, participant: nil).isComplete)
         #expect(TrialSelection(testType: .pilot03, participant: .p02).isComplete)
         // A remembered participant never leaks into other test types' names.
         #expect(TrialSelection(testType: .direction, participant: .p01).participant == nil)
+        // P03 only exists in Pilot 04: a remembered P03 leaves a Pilot 03 trial incomplete.
+        #expect(!TrialSelection(testType: .pilot03, participant: .p03).isComplete)
+        for participant in Participant.allCases {
+            #expect(TrialSelection(testType: .pilot04, participant: participant).isComplete)
+        }
+        #expect(!TrialSelection(testType: .pilot04, participant: nil).isComplete)
+    }
+
+    @Test func pilot04ExportRecordsEveryParticipantAndCondition() throws {
+        for (participant, mode, direction, stem, code) in [
+            (Participant.p01, StimulusConfig.TrialMode.okn, StimulusConfig.Direction.rightward,
+             "P04-P01_T061_OKN_RIGHT_20261104_143022", "RIGHT"),
+            (.p02, .okn, .leftward, "P04-P02_T061_OKN_LEFT_20261104_143022", "LEFT"),
+            (.p03, .fixationMovingStripes, .rightward, "P04-P03_T061_FIXMOVE_RIGHT_20261104_143022", "RIGHT"),
+            (.p01, .fixationMovingStripes, .leftward, "P04-P01_T061_FIXMOVE_LEFT_20261104_143022", "LEFT"),
+            (.p03, .fixationStillStripes, .rightward, "P04-P03_T061_FIXSTILL_NONE_20261104_143022", "NONE"),
+        ] {
+            let selection = TrialSelection(testType: .pilot04, participant: participant)
+            var r = SessionRecorder(startUptime: 100, startedAt: start, duration: 10,
+                                    stimulus: StimulusEngine(config: StimulusConfig(mode: mode, direction: direction)))
+            r.record(Fixture.tracked(at: 100.0))
+            r.name = RecordingName(experimentID: selection.testType.code, participantID: selection.participant?.rawValue,
+                                   trialNumber: 61, stimulus: r.stimulus.config, startedAt: start)
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let files = try r.export(to: dir, device: device)
+            #expect(files.directory.lastPathComponent == stem)
+            #expect(files.csv.lastPathComponent == stem + ".csv" && files.metadata.lastPathComponent == stem + ".json")
+            let meta = try decode(files.metadata)
+            #expect(meta.schemaVersion == 6)
+            #expect(meta.experimentID == "P04" && meta.testTypeName == "Pilot 04")
+            #expect(meta.participantID == participant.rawValue)
+            #expect(meta.directionCode == code)
+            #expect(meta.recordingName == stem)
+        }
     }
 
     @Test func participantPersistsUntilChanged() throws {

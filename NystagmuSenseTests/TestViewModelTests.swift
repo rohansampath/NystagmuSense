@@ -575,6 +575,30 @@ struct TestViewModelTests {
         #expect(meta.recordingName == names[0])
     }
 
+    @Test func pilot04NewParticipantIsNamedAndARememberedP03NeverStartsAPilot03Trial() throws {
+        defer { try? FileManager.default.removeItem(at: outputDir) }
+        experiment.defaults.set(TestType.pilot04.code, forKey: ExperimentLog.testTypeKey)
+        experiment.defaults.set(Participant.p03.rawValue, forKey: ExperimentLog.participantKey)
+        let vm = makeVM(uploader: nil)
+        vm.start()
+        provider.emit(Fixture.tracked(at: 100.0))
+        vm.finish()
+        let names = exportedSessions().map(\.lastPathComponent)
+        #expect(names.count == 1 && names[0].hasPrefix("P04-P03_T001_OKN_RIGHT_"))
+        let meta = try exportedMetadata()
+        #expect(meta.experimentID == "P04" && meta.participantID == "P03" && meta.directionCode == "RIGHT")
+        #expect(meta.recordingName == names[0])
+
+        // P03 isn't a Pilot 03 participant, so switching back can't record under it.
+        experiment.defaults.set(TestType.pilot03.code, forKey: ExperimentLog.testTypeKey)
+        let starts = provider.startCount
+        let next = makeVM(uploader: nil)
+        next.startPositioning()
+        next.start()
+        #expect(provider.startCount == starts)
+        guard case .failed = next.phase else { Issue.record("expected failure"); return }
+    }
+
     @Test func leftwardDirectionIsSavedAndNamed() throws {
         defer { try? FileManager.default.removeItem(at: outputDir) }
         let vm = TestViewModel(provider: provider,

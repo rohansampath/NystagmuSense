@@ -50,6 +50,9 @@ NAME_CONTRACT = 1
 STEM_RE = re.compile(
     r"[A-Z0-9-]{1,16}_T\d{3,}_(?:OKN|FIXMOVE|FIXSTILL)_(?:RIGHT|LEFT|NONE)_\d{8}_\d{6}"
     r"|NS_\d{8}-\d{6}_[0-9A-Fa-f]{8}(?:_[a-z]+)?")
+# Pilot and participant codes use the digit zero (P04, P01). A letter O
+# (PO4, PO1) can only come from hand typing, so it is refused, not filed apart.
+LETTER_O_CODE_RE = re.compile(r"(?:^|-)PO\d")
 
 
 class UploadError(Exception):
@@ -72,7 +75,7 @@ def parse_recording(body):
     stem, csv_text, json_text = (payload.get(k) for k in ("stem", "csv", "json"))
     if not all(isinstance(v, str) for v in (stem, csv_text, json_text)):
         raise UploadError(400, "expected string fields: stem, csv, json")
-    if not STEM_RE.fullmatch(stem):
+    if not STEM_RE.fullmatch(stem) or LETTER_O_CODE_RE.search(stem.split("_", 1)[0]):
         raise UploadError(400, "invalid recording name", "invalid_name", detail=repr(stem[:80]))
     # The app ends every CSV with a newline, so a missing one means truncation.
     if not csv_text.startswith("t_s,") or not csv_text.endswith("\n") or csv_text.count("\n") < 2:

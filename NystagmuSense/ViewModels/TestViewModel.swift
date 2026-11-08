@@ -325,7 +325,7 @@ final class TestViewModel: ObservableObject {
 
     // MARK: - Helpers
 
-    /// A Pilot 03 trial without a participant is never recorded, so it can't
+    /// A pilot trial without a participant is never recorded, so it can't
     /// be saved or uploaded under an incomplete name.
     private func selectionIsComplete() -> Bool {
         guard selection.isComplete else {
