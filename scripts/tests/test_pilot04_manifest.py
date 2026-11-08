@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -139,6 +140,52 @@ class Pilot04Manifest(unittest.TestCase):
         self.assertEqual(len(status), 60)
         self.assertEqual(status[first], ("complete", "manual"))
         self.assertEqual(sum(s == "not opened" for s, _ in status.values()), 59)
+
+    def test_direct_csv_annotation_cannot_bypass_p04_holdout(self):
+        name = write_recording(self.trials, "P03", 1, "OKN", "RIGHT")
+        manifest = Path(self.tmp.name) / "manifest.csv"
+        manifest.write_text(p04.render(p04.build(self.trials)[0]))
+        path = self.trials / name / f"{name}.csv"
+        # Even a different selected plan must not override the frozen split.
+        plan = {name: {"split": "development"}}
+        with patch.object(annotate_okn, "P04_MANIFEST", manifest, create=True), \
+                patch.object(annotate_okn, "propose_candidates") as propose:
+            a = annotate_okn.Annotator(path, "AA", Path(self.tmp.name) / "labels",
+                                       assisted=True, show=False, plan=plan)
+            self.addCleanup(a.plt.close, a.fig)
+            self.assertEqual(a.split, "evaluation")
+            self.assertFalse(a.suggestions_allowed)
+            propose.assert_not_called()
+
+    def test_default_evaluation_cannot_bypass_p04_holdout(self):
+        name = write_recording(self.trials, "P03", 1, "OKN", "RIGHT")
+        manifest = Path(self.tmp.name) / "manifest.csv"
+        manifest.write_text(p04.render(p04.build(self.trials)[0]))
+        labels = Path(self.tmp.name) / "labels"
+        annotate_okn.save_annotations(labels, name, "AA", [], "manual", complete=True)
+        err = io.StringIO()
+        with patch.object(annotate_okn, "P04_MANIFEST", manifest, create=True), \
+                patch.object(evaluate_okn, "evaluate") as score, \
+                contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            evaluate_okn.main(["--labels-dir", str(labels), "--annotator", "AA"])
+        self.assertIn("held-out", err.getvalue())
+        score.assert_not_called()
+
+    def test_review_status_does_not_pool_different_reviewers(self):
+        names = [write_recording(self.trials, "P03", i, "OKN", "RIGHT") for i in (1, 2)]
+        manifest = Path(self.tmp.name) / "manifest.csv"
+        manifest.write_text(p04.render(p04.build(self.trials)[0]))
+        labels = Path(self.tmp.name) / "labels"
+        annotate_okn.save_annotations(labels, names[0], "AA", [], "manual", complete=True)
+        annotate_okn.save_annotations(labels, names[1], "BB", [], "manual", complete=True)
+        with self.assertRaisesRegex(ValueError, "multiple annotators"):
+            p04.review_status(manifest, labels)
+        status = p04.review_status(manifest, labels, "AA")
+        self.assertEqual(status[names[0]], ("complete", "manual"))
+        self.assertEqual(status[names[1]], ("not opened", ""))
+        # A later review from another annotator must not replace AA's status.
+        annotate_okn.save_annotations(labels, names[0], "BB", [], "assisted", complete=False)
+        self.assertEqual(p04.review_status(manifest, labels, "AA")[names[0]], ("complete", "manual"))
 
 
 if __name__ == "__main__":

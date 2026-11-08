@@ -164,11 +164,16 @@ def shortfalls(cells):
     return out
 
 
-def review_status(manifest, labels_dir):
+def review_status(manifest, labels_dir, annotator=None):
     """trial_id → review status of the primary recordings ("not opened" when absent)."""
     import annotate_okn
-    reviews = {r["trial_id"]: r for r in annotate_okn._read_rows(Path(labels_dir) / "reviews.csv")}
     primary = [r for r in annotate_okn._read_rows(manifest) if r["eligibility"] == "primary"]
+    trial_ids = {r["trial_id"] for r in primary}
+    selected = [r for r in annotate_okn._read_rows(Path(labels_dir) / "reviews.csv")
+                if r["trial_id"] in trial_ids and (annotator is None or r["annotator_id"] == annotator)]
+    if len({r["annotator_id"] for r in selected}) > 1:
+        raise ValueError("multiple annotators found; select one with --annotator")
+    reviews = {r["trial_id"]: r for r in selected}
     return {r["trial_id"]: (reviews[r["trial_id"]]["status"], reviews[r["trial_id"]]["annotation_method"])
             if r["trial_id"] in reviews else ("not opened", "") for r in primary}
 
@@ -181,9 +186,13 @@ def main(argv=None):
     ap.add_argument("--force", action="store_true", help="overwrite a different saved manifest")
     ap.add_argument("--review-status", action="store_true", help="list each primary recording's review status")
     ap.add_argument("--labels-dir", type=Path, default=ROOT / "analysis" / "annotations_p04")
+    ap.add_argument("--annotator", help="reviewer to check; inferred only when unambiguous")
     args = ap.parse_args(argv)
     if args.review_status:
-        status = review_status(args.output, args.labels_dir)
+        try:
+            status = review_status(args.output, args.labels_dir, args.annotator)
+        except ValueError as e:
+            ap.error(str(e))
         for tid, (s, method) in sorted(status.items()):
             print(f"{tid:44} {s:12} {method}")
         done = sum(s == "complete" and m == "manual" for s, m in status.values())

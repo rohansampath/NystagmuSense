@@ -294,7 +294,7 @@ tuned before step 4.
    ```bash
    python3 scripts/annotate_okn.py --split evaluation --plan analysis/pilot_04/manifest.csv \
        --annotator AA --labels-dir analysis/annotations_p04
-   python3 analysis/pilot_04/build_manifest.py --review-status    # all 60 must be complete (manual)
+   python3 analysis/pilot_04/build_manifest.py --review-status --annotator AA    # all 60 must be complete (manual)
    ```
    - Labels stay in `analysis/annotations_p04/`, git-ignored and separate from
      Pilot 03.
