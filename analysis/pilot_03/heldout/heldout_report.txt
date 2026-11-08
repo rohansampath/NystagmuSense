@@ -1,0 +1,39 @@
+split: evaluation (12 primary trials in analysis/pilot_03/manifest.csv); artifacts: exclude
+
+Detector: sg-direction (experimental), fast threshold 22 deg/s
+tolerance ±100 ms; predictions = detector fast-phase starts
+labels are ARKit-visible events, not physiological ground truth
+
+trial                                    annot  method   mode                   TP FP FN unc  P     R     F1
+P03-P01_T011_OKN_LEFT_20261105_024418    AA     manual   okn                     4  2  0   0  0.67  1.00  0.80
+P03-P01_T018_OKN_RIGHT_20261105_024942   AA     manual   okn                     6  0  1   0  1.00  0.86  0.92
+P03-P01_T021_FIXMOVE_RIGHT_20261105_0250 AA     manual   fixationMovingStripes   0  1  9   0  0.00  0.00  0.00
+P03-P01_T023_FIXMOVE_LEFT_20261105_02520 AA     manual   fixationMovingStripes   1  0  4   0  1.00  0.20  0.33
+P03-P01_T028_FIXSTILL_NONE_20261105_0253 AA     manual   fixationStillStripes    0  2  0   0  0.00  n/a   0.00
+P03-P01_T031_FIXSTILL_NONE_20261105_0254 AA     manual   fixationStillStripes    0  1  0   0  0.00  n/a   0.00
+P03-P02_T035_OKN_LEFT_20261105_025732    AA     manual   okn                     7  0  2   0  1.00  0.78  0.88
+P03-P02_T038_OKN_RIGHT_20261105_025906   AA     manual   okn                     3  0  4   0  1.00  0.43  0.60
+P03-P02_T045_FIXMOVE_LEFT_20261105_03022 AA     manual   fixationMovingStripes   0  1  6   0  0.00  0.00  0.00
+P03-P02_T047_FIXMOVE_RIGHT_20261105_0303 AA     manual   fixationMovingStripes   4  2  3   0  0.67  0.57  0.62
+P03-P02_T050_FIXSTILL_NONE_20261105_0304 AA     manual   fixationStillStripes    0  1  0   0  0.00  n/a   0.00
+P03-P02_T052_FIXSTILL_NONE_20261105_0305 AA     manual   fixationStillStripes    0  0  0   0  n/a   n/a   n/a
+
+manual — PRIMARY (independent labels): 12 trials, TP 25 FP 10 FN 29: precision 0.71, recall 0.46, F1 0.56
+  fixation trials: 8 false detections in 8 reviewed trials (1.00 per trial)
+
+assisted: no completely reviewed trials
+
+group                              trials  TP  FP  FN  P     R     F1    FP/10s
+all: all                              12  25  10  29  0.71  0.46  0.56  0.84
+participant: P01                       6  11   6  14  0.65  0.44  0.52  1.01
+participant: P02                       6  14   4  15  0.78  0.48  0.60  0.67
+condition: FIXMOVE                     4   5   4  22  0.56  0.19  0.28  1.01
+condition: FIXSTILL                    4   0   4   0  0.00  n/a   0.00  1.01
+condition: OKN                         4  20   2   7  0.91  0.74  0.82  0.50
+participant x condition: P01 FIXMOVE     2   1   1  13  0.50  0.07  0.12  0.50
+participant x condition: P01 FIXSTILL     2   0   3   0  0.00  n/a   0.00  1.51
+participant x condition: P01 OKN       2  10   2   1  0.83  0.91  0.87  1.01
+participant x condition: P02 FIXMOVE     2   4   3   9  0.57  0.31  0.40  1.51
+participant x condition: P02 FIXSTILL     2   0   1   0  0.00  n/a   0.00  0.50
+participant x condition: P02 OKN       2  10   0   6  1.00  0.62  0.77  0.00
+per-trial results: analysis/pilot_03/heldout/heldout_trials.csv
