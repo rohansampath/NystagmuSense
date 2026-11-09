@@ -12,3 +12,7 @@ trials/*/
 # Local detector comparison plots and summaries; raw sources stay untouched.
 analysis/hybrid_comparison/
 analysis/pilot_03/label_flags.csv
+
+# Independent event labels and review status stay private, like raw recordings.
+analysis/**/events.csv
+analysis/**/reviews.csv

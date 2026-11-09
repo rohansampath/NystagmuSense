@@ -27,8 +27,14 @@ struct RecordingFiles: Equatable {
 
 enum RecordingError: Error, Equatable, LocalizedError {
     case noSamples
+    case conflictingRecording
 
-    var errorDescription: String? { "No eye-tracking samples were recorded." }
+    var errorDescription: String? {
+        switch self {
+        case .noSamples: return "No eye-tracking samples were recorded."
+        case .conflictingRecording: return "A different recording already uses this name; nothing was overwritten."
+        }
+    }
 }
 
 struct SessionRecorder {
@@ -66,7 +72,7 @@ struct SessionRecorder {
     mutating func record(_ gaze: EyeMovementSample) -> Bool {
         let t = gaze.timestamp - startUptime
         guard t >= 0, t <= duration else { droppedOutsideWindow += 1; return false }
-        if let last = samples.last, gaze.timestamp < last.gaze.timestamp {
+        if let last = samples.last, gaze.timestamp <= last.gaze.timestamp {
             droppedOutOfOrder += 1
             return false
         }
@@ -160,12 +166,27 @@ struct SessionRecorder {
 
         let stem = recordingStem
         let dir  = baseDirectory.appendingPathComponent(stem, isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-
         let csvURL  = dir.appendingPathComponent("\(stem).csv")
         let jsonURL = dir.appendingPathComponent("\(stem).json")
-        try Data(csv().utf8).write(to: csvURL, options: .atomic)
-        try SessionMetadata.encoder.encode(metadata(device: device)).write(to: jsonURL, options: .atomic)
+        // Encode both before touching the destination. Publish the pair together,
+        // and make retries idempotent without overwriting a different session.
+        let csvData = Data(csv().utf8)
+        let jsonData = try SessionMetadata.encoder.encode(metadata(device: device))
+        let fm = FileManager.default
+        if fm.fileExists(atPath: dir.path) {
+            guard (try? Data(contentsOf: csvURL)) == csvData,
+                  (try? Data(contentsOf: jsonURL)) == jsonData else {
+                throw RecordingError.conflictingRecording
+            }
+        } else {
+            try fm.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+            let staging = baseDirectory.appendingPathComponent(".export-\(UUID().uuidString)", isDirectory: true)
+            try fm.createDirectory(at: staging, withIntermediateDirectories: false)
+            defer { try? fm.removeItem(at: staging) }
+            try csvData.write(to: staging.appendingPathComponent(csvURL.lastPathComponent), options: .atomic)
+            try jsonData.write(to: staging.appendingPathComponent(jsonURL.lastPathComponent), options: .atomic)
+            try fm.moveItem(at: staging, to: dir)
+        }
         return RecordingFiles(directory: dir, csv: csvURL, metadata: jsonURL)
     }
 

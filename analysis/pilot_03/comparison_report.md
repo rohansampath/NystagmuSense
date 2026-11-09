@@ -214,8 +214,9 @@ resets, but it fires on still-stripe saccades and is slower.
    the commit and the config.
 3. **Score the 12 evaluation recordings once**, with
    `evaluate_okn.py --manifest ... --split evaluation --allow-evaluation`.
-   That needs a small `--detector` option for the direction variant; it is not
-   added here.
+   Candidate C is now exposed as `--detector sg-direction` (22 deg/s by
+   default); pass `--annotator AA --artifacts exclude` and record the frozen
+   commit/configuration before running it. The baseline remains unchanged.
 4. **Report with the stated limitations:**
    - two known participants;
    - one session;

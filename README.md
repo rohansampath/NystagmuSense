@@ -609,9 +609,41 @@ xcodebuild test -project NystagmuSense.xcodeproj -scheme NystagmuSense \
   -only-testing:NystagmuSenseUITests/NystagmuSenseUITests/testRecordingRequiresLandscape
 ```
 
-The merged implementation passed **45 Swift unit tests, 1 landscape UI test and
-37 Python tests**. The simulator verifies lifecycle/UI logic with mock gaze;
-TrueDepth capture and perceived stimulus motion require a physical phone.
+The November 5 health fixes passed **110 Swift unit tests, 1 landscape UI test
+and 164 Python tests**. The preceding four-PR integration also passed all
+7 UI tests. The simulator verifies
+lifecycle/UI logic with mock gaze; TrueDepth capture and perceived stimulus
+motion require a physical phone. The `Tests` GitHub Actions workflow runs the
+Python suite, Swift unit tests and the landscape UI regression on future PRs
+and pushes to `main`, and uploads its Xcode result bundle.
+
+### Pilot 03 evaluation readiness
+
+Use the frozen manifest for annotation queues. Direct CSV queues also recognize
+its held-out recordings and disable suggestions:
+
+```bash
+python3 scripts/annotate_okn.py --plan analysis/pilot_03/manifest.csv \
+  --split development --annotator RS --labels-dir /path/to/private-labels \
+  --trials-dir /path/to/trials
+```
+
+The proposed candidate C is available as `evaluate_okn.py --detector sg-direction`
+(SG at 22 deg/s plus the recorded stimulus direction). The original SG at
+40 deg/s remains the default. `--fast-threshold` makes an override explicit;
+exported results include the detector, threshold and annotator. Development
+sweeps and comparisons require `--annotator` when multiple annotators are
+present and refuse assisted labels. Missing recordings block a complete sweep.
+Still-stripe controls contribute false alarms, never true OKN resets.
+
+Complete the [blinded second review](analysis/pilot_03/second_review.md), decide
+the label policy and record the frozen commit/configuration **before** running
+the one-time evaluation. Then use the selected detector with `--manifest
+analysis/pilot_03/manifest.csv --split evaluation --allow-evaluation --annotator
+AA --artifacts exclude`. No held-out scoring was run during the code review.
+Raw P03 recordings and private labels must be supplied locally; Git does not
+sync these ignored files. The label checker defaults to development and also
+requires explicit opt-in for evaluation.
 
 ## Known limitations
 
