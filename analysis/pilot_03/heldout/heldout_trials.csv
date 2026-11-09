@@ -1,0 +1,13 @@
+trial_id,participant,condition,direction,split,annotator,method,detector,fast_threshold,duration_s,n_ref,n_pred,tp,fp,fn,excluded_uncertain,excluded_artifact,mean_abs_offset_ms,precision,recall,f1
+P03-P01_T011_OKN_LEFT_20261105_024418,P01,OKN,LEFT,evaluation,AA,manual,sg-direction,22,9.932,4,6,4,2,0,0,0,25.0,0.67,1.00,0.80
+P03-P01_T018_OKN_RIGHT_20261105_024942,P01,OKN,RIGHT,evaluation,AA,manual,sg-direction,22,9.948,7,6,6,0,1,0,0,8.3,1.00,0.86,0.92
+P03-P01_T021_FIXMOVE_RIGHT_20261105_025058,P01,FIXMOVE,RIGHT,evaluation,AA,manual,sg-direction,22,9.932,9,1,0,1,9,0,0,,0.00,0.00,0.00
+P03-P01_T023_FIXMOVE_LEFT_20261105_025201,P01,FIXMOVE,LEFT,evaluation,AA,manual,sg-direction,22,9.915,5,1,1,0,4,0,0,0.0,1.00,0.20,0.33
+P03-P01_T028_FIXSTILL_NONE_20261105_025337,P01,FIXSTILL,NONE,evaluation,AA,manual,sg-direction,22,9.915,0,2,0,2,0,0,0,,0.00,n/a,0.00
+P03-P01_T031_FIXSTILL_NONE_20261105_025444,P01,FIXSTILL,NONE,evaluation,AA,manual,sg-direction,22,9.915,0,1,0,1,0,0,0,,0.00,n/a,0.00
+P03-P02_T035_OKN_LEFT_20261105_025732,P02,OKN,LEFT,evaluation,AA,manual,sg-direction,22,9.965,9,7,7,0,2,0,0,35.7,1.00,0.78,0.88
+P03-P02_T038_OKN_RIGHT_20261105_025906,P02,OKN,RIGHT,evaluation,AA,manual,sg-direction,22,9.932,7,3,3,0,4,0,0,22.2,1.00,0.43,0.60
+P03-P02_T045_FIXMOVE_LEFT_20261105_030225,P02,FIXMOVE,LEFT,evaluation,AA,manual,sg-direction,22,9.948,6,1,0,1,6,0,0,,0.00,0.00,0.00
+P03-P02_T047_FIXMOVE_RIGHT_20261105_030327,P02,FIXMOVE,RIGHT,evaluation,AA,manual,sg-direction,22,9.948,7,6,4,2,3,0,0,8.3,0.67,0.57,0.62
+P03-P02_T050_FIXSTILL_NONE_20261105_030434,P02,FIXSTILL,NONE,evaluation,AA,manual,sg-direction,22,9.948,0,1,0,1,0,0,0,,0.00,n/a,0.00
+P03-P02_T052_FIXSTILL_NONE_20261105_030542,P02,FIXSTILL,NONE,evaluation,AA,manual,sg-direction,22,9.932,0,0,0,0,0,0,0,,n/a,n/a,n/a
