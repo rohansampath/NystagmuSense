@@ -42,7 +42,8 @@ itself a calibrated contrast-sensitivity measurement.
 | 10 s raw ARKit eye-tracking recording | Earlier app recordings are checked into `trials/`; the newly merged landscape/permission/retry flow passes simulator tests and needs a fresh phone run |
 | CSV + JSON export (share sheet / Files app) | Real schema-v1 device exports are checked in; new recordings use schema v2 with surface size and stripe/background settings |
 | Python plotting (`scripts/plot_gaze.py`) | Tested on synthetic data and checked-in real device recordings |
-| OKN detection | **Candidate only, offline:** `scripts/detect_okn.py` (Savitzky–Golay baseline, tuned on synthetic data). Not in the app; legacy Swift heuristic in `Services/Analysis/` stays disabled |
+| OKN detection | **Candidate only, offline:** `scripts/detect_okn.py` (Savitzky–Golay baseline). The Pilot 03 detector (SG + stimulus direction, 22 deg/s) is frozen and was scored once on held-out data: F1 0.56 overall, 0.82 on OKN trials (see [Pilot 03 results](#pilot-03-results)). Not in the app; legacy Swift heuristic in `Services/Analysis/` stays disabled |
+| Pilot 04 | Recording protocol, app test type and manifest builder are ready; external-validation recordings for `P01`–`P03` are not yet collected (see [Pilot 04](#pilot-04-external-validation)) |
 | Contrast-sensitivity score | **Removed from the test flow.** "Past Tests" shows only legacy prototype scores |
 
 Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -77,8 +78,9 @@ In-app OKN detection and contrast-sensitivity measurement remain future work.
    remembers it across launches, and the line below it shows the next name,
    e.g. `DIR_T004`. Test type only labels the recording; it doesn't change the
    stimulus.
-   For **Pilot 03** also pick the **participant** (`P01` / `P02`, remembered
-   until changed); **Record** stays disabled until one is chosen.
+   For **Pilot 03** (`P01` / `P02`) and **Pilot 04** (`P01` / `P02` / `P03`)
+   also pick the **participant** (remembered until changed); **Record** stays
+   disabled until one is chosen.
 3. Pick the **condition** (`OKN`, `Dot + moving`, `Dot + still`) and, for
    moving stripes, the **stripe direction** (`← Left` or `Right →`; Right is
    the default). Still stripes show "Direction: none" and are named `NONE`.
@@ -120,7 +122,7 @@ P02_T004_FIXMOVE_RIGHT_20261104_143220.csv / .json
 P03-P01_T005_OKN_LEFT_20261106_150030.csv / .json
 ```
 
-A trial with a participant (Pilot 03) writes `{code}-{participant}` in the
+A trial with a participant (Pilot 03 or 04) writes `{code}-{participant}` in the
 `TEST` field, e.g. `P03-P01`. That already fits contract 1 (`TEST` allows
 `A–Z 0–9 -`), so older receivers accept it and the contract number is unchanged.
 
@@ -618,10 +620,31 @@ motion require a physical phone. The `Tests` GitHub Actions workflow runs the
 Python suite, Swift unit tests and the landscape UI regression on future PRs
 and pushes to `main`, and uploads its Xcode result bundle.
 
-### Pilot 03 evaluation readiness
+### Pilot 03 results
 
-Use the frozen manifest for annotation queues. Direct CSV queues also recognize
-its held-out recordings and disable suggestions:
+The held-out evaluation has been run. Before scoring, the detector was frozen
+as **SG + stimulus direction at 22 deg/s** (settings, commit and checksums in
+[analysis/pilot_03/frozen_detector.md](analysis/pilot_03/frozen_detector.md)).
+It was then scored once on the 12 evaluation recordings:
+
+| | Recordings | Precision | Recall | F1 | FP / 10 s |
+|---|---|---|---|---|---|
+| **Held-out** | 12 | 0.71 | 0.46 | **0.56** (bootstrap 95 % CI 0.29–0.75) | 0.84 |
+| Development (not an independent test) | 28 | 0.79 | 0.59 | 0.67 | 0.90 |
+
+- On regular **OKN** trials, held-out F1 is 0.82 (development 0.85).
+  **Dot + moving** is weak (F1 0.28, recall about 0.2).
+- A development-only filter experiment compared SG, Butterworth and
+  Butterworth + SG velocity
+  ([analysis/pilot_03/filter_comparison/](analysis/pilot_03/filter_comparison/)).
+  All three plateau at F1 0.68–0.69, so direction-aware SG was kept.
+- The full write-up is in
+  [analysis/pilot_03/final_report.md](analysis/pilot_03/final_report.md). It
+  covers two participants and one annotator, and the labels describe the ARKit
+  signal, not physiological ground truth.
+
+To reproduce the annotation queues, use the frozen manifest. Direct CSV queues
+also recognize its held-out recordings and disable suggestions:
 
 ```bash
 python3 scripts/annotate_okn.py --plan analysis/pilot_03/manifest.csv \
@@ -637,14 +660,31 @@ sweeps and comparisons require `--annotator` when multiple annotators are
 present and refuse assisted labels. Missing recordings block a complete sweep.
 Still-stripe controls contribute false alarms, never true OKN resets.
 
-Complete the [blinded second review](analysis/pilot_03/second_review.md), decide
-the label policy and record the frozen commit/configuration **before** running
-the one-time evaluation. Then use the selected detector with `--manifest
-analysis/pilot_03/manifest.csv --split evaluation --allow-evaluation --annotator
-AA --artifacts exclude`. No held-out scoring was run during the code review.
-Raw P03 recordings and private labels must be supplied locally; Git does not
-sync these ignored files. The label checker defaults to development and also
-requires explicit opt-in for evaluation.
+The one-time evaluation used `--manifest analysis/pilot_03/manifest.csv
+--split evaluation --allow-evaluation --annotator AA --artifacts exclude
+--detector sg-direction`. Don't re-run it to tune anything: the held-out split
+has now been used. Raw P03 recordings and private labels must be supplied
+locally; Git does not sync these ignored files. The label checker defaults to
+development and also requires explicit opt-in for evaluation.
+
+### Pilot 04 (external validation)
+
+Pilot 04 collects 60 new recordings (`P01` and `P02` returning, `P03` new;
+20 each) with the Pilot 03 stimulus. Its purpose is to test the **frozen** Pilot
+03 detector on data it was never tuned on. The protocol, session log and
+step-by-step commands are in [docs/PILOT_04.md](docs/PILOT_04.md). In brief:
+
+1. Build the manifest with `python3 analysis/pilot_04/build_manifest.py`. Every
+   primary recording is held out (`split=evaluation`).
+2. Annotate without detector suggestions into `analysis/annotations_p04/`
+   (git-ignored and separate from Pilot 03). Check progress for one reviewer
+   with `build_manifest.py --review-status --annotator AA`. If more than one
+   reviewer is present, `--annotator` is required.
+3. Score the frozen detector once (**Report A**) and commit the results
+   unchanged.
+4. Only after that, Pilot 04 may become development data for an exploratory SG
+   hyperparameter study (**Report B**). Report B is never presented as
+   independent validation.
 
 ## Known limitations
 
