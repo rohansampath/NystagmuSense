@@ -62,7 +62,7 @@ struct SessionMetadata: Codable, Equatable {
     ///    `{experiment}_{T###}_{MODE}_{DIR}_{UTC}`) and faceDistance.
     /// 5: experimentID is now a predefined test-type code (TestType); adds
     ///    testTypeName. Trial numbers are shared by all test types.
-    /// 6: adds participantID (Pilot 03), which also follows the code in the
+    /// 6: adds participantID (Pilot 03; also Pilot 04, unchanged schema), which also follows the code in the
     ///    stem's first field (`P03-P01_…`), and directionCode, the stem's
     ///    direction field (NONE for still stripes).
     var schemaVersion = 6
@@ -135,7 +135,7 @@ struct SessionMetadata: Codable, Equatable {
         "startedAt": "recording start, ISO 8601 UTC; also the timestamp in recordingName",
         "experimentID": "test-type code chosen on the menu, e.g. DIR (schema 5+); free-text experiment ID in schema 4",
         "testTypeName": "display name of that test type, e.g. Direction Test (schema 5+)",
-        "participantID": "pseudonymous participant code chosen before the trial, e.g. P01 (Pilot 03; "
+        "participantID": "pseudonymous participant code chosen before the trial, e.g. P01 (Pilot 03 and 04; "
             + "schema 6+); absent for test types without participants",
         "directionCode": "RIGHT, LEFT or NONE, the direction field of recordingName; NONE when the stripes "
             + "don't move, whatever stimulus.direction says (schema 6+)",

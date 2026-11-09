@@ -289,6 +289,69 @@ class Pilot03Tests(ServerTestCase):
         self.assertEqual(self.upload(stem=name, meta=meta)[0], 201)
 
 
+class Pilot04Tests(ServerTestCase):
+    """Pilot 04: same contract as Pilot 03 with code P04 and participants P01-P03."""
+
+    def meta(self, name, **overrides):
+        fields = dict(schemaVersion=6, experimentID="P04", participantID=name[4:7], recordingName=name,
+                      directionCode=name.split("_")[3])
+        fields.update(overrides)
+        return json.dumps(fields)
+
+    def p04_cases(self):
+        return [c for c in FIXTURE["generated"] if c["testType"] == "P04"]
+
+    def test_five_smoke_test_trials_arrive_as_matching_pairs(self):
+        cases = self.p04_cases()
+        self.assertEqual({(c["participant"], c["name"].split("_")[2], c["name"].split("_")[3]) for c in cases},
+                         {("P01", "OKN", "RIGHT"), ("P02", "OKN", "LEFT"), ("P03", "FIXMOVE", "RIGHT"),
+                          ("P01", "FIXMOVE", "LEFT"), ("P03", "FIXSTILL", "NONE")})
+        for case in cases:
+            name = case["name"]
+            self.assertEqual(self.upload(stem=name, meta=self.meta(name))[0], 201, name)
+            self.assertEqual(sorted(p.name for p in (self.trials / name).iterdir()), [name + ".csv", name + ".json"])
+            self.assertEqual(json.loads((self.trials / name / f"{name}.json").read_text())["participantID"],
+                             case["participant"])
+
+    def test_pilot_03_and_04_recordings_of_the_same_person_coexist(self):
+        p03 = next(c["name"] for c in FIXTURE["generated"] if c["testType"] == "P03" and c["participant"] == "P01")
+        p04 = next(c["name"] for c in self.p04_cases() if c["participant"] == "P01")
+        self.assertEqual(self.upload(stem=p03, meta=Pilot03Tests.meta(self, p03, experimentID="P03"))[0], 201)
+        self.assertEqual(self.upload(stem=p04, meta=self.meta(p04))[0], 201)
+        self.assertEqual(self.saved_folders(), sorted([p03, p04]))
+
+    def test_retry_is_idempotent_and_a_conflict_never_overwrites(self):
+        name = self.p04_cases()[4]["name"]              # P04-P03_T065_FIXSTILL_NONE_...
+        self.assertEqual(self.upload(stem=name, meta=self.meta(name))[0], 201)
+        self.assertEqual(self.upload(stem=name, meta=self.meta(name)), (200, {"status": "already_received", "stem": name}))
+        status, data = self.upload(stem=name, meta=self.meta(name, trialNumber=99))
+        self.assertEqual((status, data["code"]), (409, "conflict"))
+        self.assertEqual((self.trials / name / f"{name}.json").read_text(), self.meta(name))
+
+    def test_metadata_that_disagrees_with_the_name_is_refused(self):
+        name = self.p04_cases()[2]["name"]              # P04-P03_T063_FIXMOVE_RIGHT_...
+        for meta in (self.meta(name, participantID="P01"), self.meta(name, experimentID="P03"),
+                     self.meta(name, recordingName=name.replace("_RIGHT_", "_LEFT_"))):
+            status, data = self.upload(stem=name, meta=meta)
+            self.assertEqual((status, data["code"]), (400, "mismatched_metadata"), meta)
+        self.assertEqual(self.saved_folders(), [])
+
+    def test_letter_o_codes_are_refused(self):
+        for stem in ("PO4-P01_T061_OKN_RIGHT_20261109_150000", "P04-PO1_T061_OKN_RIGHT_20261109_150000"):
+            status, data = self.upload(stem=stem)
+            self.assertEqual((status, data["code"]), (400, "invalid_name"), stem)
+
+    def test_received_pilot_04_recording_is_read_by_detection(self):
+        import detect_okn
+        from test_detect_okn import okn_angle, synthetic_csv
+        name = self.p04_cases()[0]["name"]              # P04-P01_T061_OKN_RIGHT_...
+        meta = self.meta(name, stimulus={"trialMode": "okn", "direction": "rightward"})
+        self.assertEqual(self.upload(stem=name, csv=synthetic_csv(okn_angle), meta=meta)[0], 201)
+        csv_path = self.trials / name / f"{name}.csv"
+        self.assertEqual(detect_okn.load_trial_mode(csv_path), "okn")
+        self.assertGreater(len(detect_okn.analyse(detect_okn.load_session(csv_path), detect_okn.Params())["fast"]), 0)
+
+
 class ParseTests(unittest.TestCase):
     def test_legacy_stem_without_mode_is_valid(self):
         body = json.dumps({"stem": "NS_20261024-101500_ABCD1234", "csv": CSV, "json": META})

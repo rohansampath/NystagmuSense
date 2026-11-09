@@ -135,6 +135,7 @@ A trial with a participant (Pilot 03) writes `{code}-{participant}` in the
 | Distance Test | `DIST` | Validate pre-trial distance measurement |
 | Pilot 02 | `P02` | Formal next pilot recordings |
 | Pilot 03 | `P03` | High-contrast OKN validation, participants `P01`/`P02`; constant white background (see [docs/PILOT_03.md](docs/PILOT_03.md)) |
+| Pilot 04 | `P04` | External validation of the frozen Pilot 03 detector, participants `P01`/`P02`/`P03`; same stimulus as Pilot 03 (see [docs/PILOT_04.md](docs/PILOT_04.md)) |
 
 - **Timestamp:** the recording start in **UTC**, the same instant as
   `startedAt` in the JSON.

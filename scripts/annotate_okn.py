@@ -72,6 +72,7 @@ DEFAULT_TRIALS_DIR = Path(__file__).resolve().parents[1] / "trials"
 # Which trials are held out for evaluation; the order is the annotation order.
 PLAN_CSV = DEFAULT_LABELS_DIR / "plan.csv"
 P03_MANIFEST = DEFAULT_LABELS_DIR.parent / "pilot_03" / "manifest.csv"
+P04_MANIFEST = DEFAULT_LABELS_DIR.parent / "pilot_04" / "manifest.csv"
 SPLITS = ("evaluation", "development")
 CONDITIONS = {"okn": "OKN (watch stripes)", "fixationMovingStripes": "fixation dot + moving stripes",
               "fixationStillStripes": "fixation dot + still stripes"}
@@ -303,6 +304,7 @@ class Annotator:
         self.assisted = assisted
         self.plan = load_plan() if plan is None else plan
         self.p03_plan = load_plan(P03_MANIFEST)
+        self.p04_plan = load_plan(P04_MANIFEST)
         self.statuses = review_statuses(labels_dir, annotator)
         self.index = None
         self.show_help = True
@@ -333,10 +335,11 @@ class Annotator:
         except (detect_okn.SessionError, ValueError, OSError) as e:
             self.notify(f"could not open {trial_id}: {e}", "error")
             return False
-        # Direct CSV queues still honour the frozen P03 split, even when the
+        # Direct CSV queues still honour the frozen pilot splits, even when the
         # caller left the older Pilot 01 annotation plan selected.
-        plan_row = self.plan.get(trial_id) or self.p03_plan.get(trial_id) or {}
-        if self.p03_plan.get(trial_id, {}).get("split") == "evaluation":
+        plan_row = self.plan.get(trial_id) or self.p03_plan.get(trial_id) or self.p04_plan.get(trial_id) or {}
+        if any(plan.get(trial_id, {}).get("split") == "evaluation"
+               for plan in (self.p03_plan, self.p04_plan)):
             plan_row = {**plan_row, "split": "evaluation"}
         self.index, self.csv_path, self.trial_id, self.sig, self.mode = i, path, trial_id, sig, mode
         self.split, self.pilot_id = plan_row.get("split"), plan_row.get("pilot_id")

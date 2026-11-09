@@ -309,12 +309,13 @@ def main(argv=None):
     except ValueError as e:
         ap.error(str(e))
     if args.manifest is None:
-        held = {tid for tid, row in annotate_okn.load_plan(annotate_okn.P03_MANIFEST).items()
+        held = {tid for manifest in (annotate_okn.P03_MANIFEST, annotate_okn.P04_MANIFEST)
+                for tid, row in annotate_okn.load_plan(manifest).items()
                 if row["split"] == "evaluation"}
         reviews = annotate_okn._read_rows(args.labels_dir / "reviews.csv")
         if any(r["trial_id"] in held and (args.annotator is None or r["annotator_id"] == args.annotator)
                for r in reviews):
-            ap.error("Pilot 03 evaluation reviews found; select --manifest and --split explicitly")
+            ap.error("held-out pilot evaluation reviews found; select --manifest and --split explicitly")
     if args.split:
         print(f"split: {args.split} ({len(include)} primary trials in {args.manifest}); artifacts: {args.artifacts}")
     methods = ("sg", "hybrid") if args.detector == "both" else (args.detector,)

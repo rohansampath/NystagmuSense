@@ -30,10 +30,10 @@ struct MenuView: View {
                     }
                     if selection.testType.requiresParticipant {
                         Picker("Participant", selection: participant) {
-                            ForEach(Participant.allCases) { Text($0.rawValue).tag(Optional($0)) }
+                            ForEach(selection.testType.participants) { Text($0.rawValue).tag(Optional($0)) }
                         }
                         .pickerStyle(.segmented)
-                        .frame(width: 220)
+                        .frame(width: 70 * CGFloat(selection.testType.participants.count) + 80)
                     }
                     Picker("Condition", selection: $vm.trialMode) {
                         Text("OKN").tag(StimulusConfig.TrialMode.okn)

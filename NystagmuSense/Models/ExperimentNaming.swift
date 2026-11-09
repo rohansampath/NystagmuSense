@@ -20,6 +20,7 @@ enum TestType: String, CaseIterable, Identifiable {
     case distance        = "DIST"
     case pilot02         = "P02"
     case pilot03         = "P03"
+    case pilot04         = "P04"
 
     var id: String { rawValue }
     var code: String { rawValue }
@@ -35,21 +36,33 @@ enum TestType: String, CaseIterable, Identifiable {
         case .distance:        return "Distance Test"
         case .pilot02:         return "Pilot 02"
         case .pilot03:         return "Pilot 03"
+        case .pilot04:         return "Pilot 04"
         }
     }
 
-    /// Pilot 03 recordings must say who was recorded; no recording starts without it.
-    var requiresParticipant: Bool { self == .pilot03 }
+    /// Participants that can be recorded under this test type (empty: none).
+    /// Codes stay the same across pilots for the same person.
+    var participants: [Participant] {
+        switch self {
+        case .pilot03: return [.p01, .p02]
+        case .pilot04: return [.p01, .p02, .p03]
+        default:       return []
+        }
+    }
 
-    /// Pilot 03 keeps a constant white background (black bars, full contrast)
-    /// instead of the default white → black fade. Nil keeps the fade.
-    var fixedBackgroundGray: Double? { self == .pilot03 ? 1 : nil }
+    /// Pilot recordings must say who was recorded; no recording starts without it.
+    var requiresParticipant: Bool { !participants.isEmpty }
+
+    /// Pilots 03 and 04 keep a constant white background (black bars, full
+    /// contrast) instead of the default white → black fade. Nil keeps the fade.
+    var fixedBackgroundGray: Double? { self == .pilot03 || self == .pilot04 ? 1 : nil }
 }
 
 /// Pseudonymous participant codes. Names are never stored on the phone.
 enum Participant: String, CaseIterable, Identifiable {
     case p01 = "P01"
     case p02 = "P02"
+    case p03 = "P03"
 
     var id: String { rawValue }
 }
@@ -58,12 +71,12 @@ enum Participant: String, CaseIterable, Identifiable {
 /// once when the trial screen opens, so a later menu change can't relabel it.
 struct TrialSelection: Equatable {
     let testType: TestType
-    /// Only kept for test types that need one.
+    /// Only kept for test types that offer that participant.
     let participant: Participant?
 
     init(testType: TestType, participant: Participant?) {
         self.testType = testType
-        self.participant = testType.requiresParticipant ? participant : nil
+        self.participant = participant.flatMap { testType.participants.contains($0) ? $0 : nil }
     }
 
     var isComplete: Bool { !testType.requiresParticipant || participant != nil }
@@ -77,7 +90,8 @@ struct TrialSelection: Equatable {
 ///
 /// e.g. `DIR_T001_OKN_RIGHT_20261104_143022`. TEST is upper-case letters,
 /// digits or "-", 1–16 characters: the test-type code, followed by
-/// `-{participant}` when the trial has one (`P03-P01_T041_OKN_LEFT_…`).
+/// `-{participant}` when the trial has one (`P03-P01_T041_OKN_LEFT_…`,
+/// `P04-P03_T061_FIXSTILL_NONE_…`).
 /// Built only from the trial's own settings (never inferred from gaze); the
 /// folder, CSV and JSON share it.
 struct RecordingName: Equatable {
