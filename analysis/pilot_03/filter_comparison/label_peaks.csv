@@ -1,0 +1,7 @@
+method,config,condition,n_labels,median_peak_deg_s,median_peak_over_threshold,share_crossing_threshold,share_detected,median_peak_shift_ms,sg_missed_labels_detected
+sg,sg 22 deg/s,OKN,100,40.2,1.83,0.88,0.85,0.0,0 of 15
+sg,sg 22 deg/s,FIXMOVE,60,13.0,0.59,0.18,0.15,0.0,0 of 51
+bw,bw 8 Hz 20 deg/s,OKN,100,36.2,1.81,0.87,0.86,0.0,2 of 15
+bw,bw 8 Hz 20 deg/s,FIXMOVE,60,12.1,0.61,0.18,0.15,0.0,0 of 51
+bw+sg,bw+sg 15 Hz 22 deg/s,OKN,100,39.2,1.78,0.87,0.86,0.0,1 of 15
+bw+sg,bw+sg 15 Hz 22 deg/s,FIXMOVE,60,13.3,0.60,0.18,0.15,0.0,0 of 51

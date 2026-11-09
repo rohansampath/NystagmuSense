@@ -77,7 +77,7 @@ definition in every condition. In the plotted convention (+ = subject's left):
 | Still | none | none expected |
 
 **Still stripes:**
-- A still-stripe trial may still contain OKN-like events; don't assume zero.
+- With no stripe motion there is no OKN reset to label. Every Pilot 03 still-stripe trial was reviewed with zero `fast_phase` labels.
 - Don't label ordinary isolated saccades as fast phases.
 - Mark candidates you can't decide on as `uncertain`.
 - Mark blink or tracking glitches as `artifact`.
@@ -94,6 +94,7 @@ definition in every condition. In the plotted convention (+ = subject's left):
 - **`uncertain` labels:** never counted as a miss; predictions within 100 ms of one are left unscored.
 - **`artifact` labels:** with `--artifacts exclude` (used for P03), predictions within 100 ms are left unscored. The default, `false-positive`, keeps the Pilot 01 behaviour.
 - **Trials with no resets:** every prediction is a false positive; recall is n/a. False positives are also reported per 10 s.
+- **Still-stripe trials:** controls. With `--manifest`, any `fast_phase` label on a `FIXSTILL` trial is ignored, so detections there can only be false positives. There is no stimulus direction, so the direction check keeps every fast phase. `uncertain` and `artifact` labels still leave nearby predictions unscored.
 - **Metrics:** precision, recall and F1 = 2TP / (2TP + FP + FN), pooled over trials, and broken down by participant, condition, and participant × condition.
 
 ## Threshold choice (fixed before the sweep)
