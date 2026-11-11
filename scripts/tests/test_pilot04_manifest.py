@@ -26,7 +26,7 @@ _spec = importlib.util.spec_from_file_location("p04_manifest", ROOT / "analysis/
 p04 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(p04)
 
-PLAN = [("OKN", "RIGHT", 4), ("OKN", "LEFT", 4), ("FIXMOVE", "RIGHT", 3), ("FIXMOVE", "LEFT", 3), ("FIXSTILL", "NONE", 6)]
+PLAN = [("OKN", "RIGHT", 4), ("OKN", "LEFT", 4), ("FIXMOVE", "RIGHT", 4), ("FIXMOVE", "LEFT", 4), ("FIXSTILL", "NONE", 4)]   # as collected
 MODE = {"OKN": "okn", "FIXMOVE": "fixationMovingStripes", "FIXSTILL": "fixationStillStripes"}
 
 
@@ -96,7 +96,7 @@ class Pilot04Manifest(unittest.TestCase):
         self.assertIn("no distance data", rows[0]["technical_notes"])
         self.assertEqual(rows[0]["technical_status"], "pass")
         self.assertIn("P03 OKN RIGHT: 1/4", p04.shortfalls(cells))
-        self.assertIn("P01 FIXSTILL NONE: 0/6", p04.shortfalls(cells))
+        self.assertIn("P01 FIXSTILL NONE: 0/4", p04.shortfalls(cells))
 
     def test_pilot_03_recordings_are_ignored(self):
         (self.trials / "P03-P01_T011_OKN_LEFT_20261105_024418").mkdir()

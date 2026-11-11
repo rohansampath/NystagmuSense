@@ -31,6 +31,33 @@ Names never go into the app, file names, metadata or this repository.
 
 The fixation dot never moves.
 
+### Protocol deviation (as collected, 8–9 Nov 2026)
+
+Each participant actually recorded **4 trials of every one of the five
+conditions**:
+
+| Condition | Direction | Planned per participant | Collected per participant | Collected, all |
+|---|---|---:|---:|---:|
+| OKN | Right | 4 | 4 | 12 |
+| OKN | Left | 4 | 4 | 12 |
+| Dot + moving | Right | 3 | **4** | 12 |
+| Dot + moving | Left | 3 | **4** | 12 |
+| Dot + still | none | 6 | **4** | 12 |
+| **Total** | | **20** | **20** | **60** |
+
+**Totals:** 24 OKN, 24 Dot + moving and 12 Dot + still recordings.
+
+**Decision:** all 60 recordings are primary, and none were dropped to fit the
+original plan. The decision was made on recording counts only, before any
+detector was run on Pilot 04. `analysis/pilot_04/build_manifest.py` uses
+4 per cell.
+
+**Consequences:**
+- there are fewer still-stripe control trials (12 instead of 18);
+- Dot + moving carries more weight in pooled metrics.
+
+The checklists below show the original plan.
+
 ## Stimulus
 
 Identical to Pilot 03. The app applies it automatically for the Pilot 04 test
