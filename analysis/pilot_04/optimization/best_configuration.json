@@ -1,0 +1,64 @@
+{
+  "status": "development only (Pilot 04 reused after its external validation); not independent test performance",
+  "selection_reason": "best eligible config",
+  "configuration": {
+    "fast_threshold_deg_s": 18,
+    "sg_window": 7,
+    "sg_polyorder": 2,
+    "direction_check": true,
+    "other_params": "detect_okn.Params defaults"
+  },
+  "reference": {
+    "fast_threshold_deg_s": 22,
+    "sg_window": 5,
+    "sg_polyorder": 2
+  },
+  "development_all_60": {
+    "chosen": {
+      "precision": 0.6979166666666666,
+      "recall": 0.4652777777777778,
+      "f1": 0.5583333333333333,
+      "tp": 134,
+      "fp": 58,
+      "fn": 154,
+      "fp_per_10s": 0.9723333394797095,
+      "okn_recall": 0.7516778523489933,
+      "still_fp_per_10s": 2.3457664821302444,
+      "f1_by_participant": {
+        "P01": 0.4624277456647399,
+        "P02": 0.4864864864864865,
+        "P03": 0.7295597484276729
+      }
+    },
+    "reference": {
+      "precision": 0.645933014354067,
+      "recall": 0.46875,
+      "f1": 0.5432595573440644,
+      "tp": 135,
+      "fp": 74,
+      "fn": 153,
+      "fp_per_10s": 1.2405632262327329,
+      "okn_recall": 0.7516778523489933,
+      "still_fp_per_10s": 2.9322081026628055,
+      "f1_by_participant": {
+        "P01": 0.44086021505376344,
+        "P02": 0.4868421052631579,
+        "P03": 0.7169811320754716
+      }
+    }
+  },
+  "cross_validation": [
+    {
+      "held_out": "P01",
+      "chosen": "22 deg/s, window 5, order 2"
+    },
+    {
+      "held_out": "P02",
+      "chosen": "18 deg/s, window 7, order 2"
+    },
+    {
+      "held_out": "P03",
+      "chosen": "18 deg/s, window 7, order 2"
+    }
+  ]
+}

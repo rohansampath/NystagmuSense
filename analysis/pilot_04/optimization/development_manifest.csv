@@ -1,0 +1,61 @@
+trial_id,participant,participant_status,trial_number,condition,direction,folder,technical_status,technical_notes,eligibility,exclusion_reason,role,split,original_role
+P04-P01_T057_OKN_LEFT_20261108_233916,P01,returning,57,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T058_OKN_LEFT_20261108_233942,P01,returning,58,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T059_OKN_LEFT_20261108_234012,P01,returning,59,OKN,LEFT,.,pass,distance outside 25-30 cm for 8% of the trial (median 29.6 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P01_T060_OKN_LEFT_20261108_234046,P01,returning,60,OKN,LEFT,.,pass,distance outside 25-30 cm for 6% of the trial (median 28.9 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P01_T061_OKN_RIGHT_20261108_234122,P01,returning,61,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T062_OKN_RIGHT_20261108_234138,P01,returning,62,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T063_OKN_RIGHT_20261108_234154,P01,returning,63,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T064_OKN_RIGHT_20261108_234210,P01,returning,64,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T065_FIXMOVE_LEFT_20261108_234237,P01,returning,65,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T067_FIXMOVE_LEFT_20261108_234312,P01,returning,67,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T068_FIXMOVE_LEFT_20261108_234346,P01,returning,68,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T069_FIXMOVE_LEFT_20261108_234430,P01,returning,69,FIXMOVE,LEFT,.,pass,distance outside 25-30 cm for 24% of the trial (median 29.8 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P01_T070_FIXMOVE_RIGHT_20261108_235103,P01,returning,70,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T071_FIXMOVE_RIGHT_20261108_235117,P01,returning,71,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T072_FIXMOVE_RIGHT_20261108_235132,P01,returning,72,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T073_FIXMOVE_RIGHT_20261108_235159,P01,returning,73,FIXMOVE,RIGHT,.,pass,distance outside 25-30 cm for 23% of the trial (median 26.2 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P01_T074_FIXSTILL_NONE_20261108_235225,P01,returning,74,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T075_FIXSTILL_NONE_20261108_235241,P01,returning,75,FIXSTILL,NONE,.,pass,distance outside 25-30 cm for 41% of the trial (median 26.3 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P01_T076_FIXSTILL_NONE_20261108_235300,P01,returning,76,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P01_T077_FIXSTILL_NONE_20261108_235328,P01,returning,77,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T078_OKN_LEFT_20261109_000741,P02,returning,78,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T079_OKN_LEFT_20261109_000800,P02,returning,79,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T080_OKN_LEFT_20261109_000816,P02,returning,80,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T081_OKN_LEFT_20261109_000833,P02,returning,81,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T082_OKN_RIGHT_20261109_000850,P02,returning,82,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T083_OKN_RIGHT_20261109_000906,P02,returning,83,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T084_OKN_RIGHT_20261109_000935,P02,returning,84,OKN,RIGHT,.,pass,distance outside 25-30 cm for 88% of the trial (median 24.9 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P02_T085_OKN_RIGHT_20261109_000951,P02,returning,85,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T086_FIXMOVE_LEFT_20261109_001009,P02,returning,86,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T087_FIXMOVE_LEFT_20261109_001025,P02,returning,87,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T088_FIXMOVE_LEFT_20261109_001041,P02,returning,88,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T089_FIXMOVE_LEFT_20261109_001056,P02,returning,89,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T090_FIXMOVE_RIGHT_20261109_001119,P02,returning,90,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T091_FIXMOVE_RIGHT_20261109_001134,P02,returning,91,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T092_FIXMOVE_RIGHT_20261109_001150,P02,returning,92,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T093_FIXMOVE_RIGHT_20261109_001212,P02,returning,93,FIXMOVE,RIGHT,.,pass,distance check bypassed; measured 25.9-27.5 cm,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T094_FIXSTILL_NONE_20261109_001229,P02,returning,94,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T095_FIXSTILL_NONE_20261109_001246,P02,returning,95,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T096_FIXSTILL_NONE_20261109_001301,P02,returning,96,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P02_T097_FIXSTILL_NONE_20261109_001316,P02,returning,97,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T098_OKN_LEFT_20261109_001545,P03,new,98,OKN,LEFT,.,pass,distance outside 25-30 cm for 67% of the trial (median 24.7 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P03_T099_OKN_LEFT_20261109_001603,P03,new,99,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T100_OKN_LEFT_20261109_001620,P03,new,100,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T101_OKN_LEFT_20261109_001639,P03,new,101,OKN,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T102_OKN_RIGHT_20261109_001715,P03,new,102,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T103_OKN_RIGHT_20261109_001731,P03,new,103,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T104_OKN_RIGHT_20261109_001748,P03,new,104,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T105_OKN_RIGHT_20261109_001808,P03,new,105,OKN,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T106_FIXMOVE_LEFT_20261109_001826,P03,new,106,FIXMOVE,LEFT,.,pass,distance outside 25-30 cm for 54% of the trial (median 24.5 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P03_T107_FIXMOVE_LEFT_20261109_001845,P03,new,107,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T108_FIXMOVE_LEFT_20261109_001904,P03,new,108,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T109_FIXMOVE_LEFT_20261109_001924,P03,new,109,FIXMOVE,LEFT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T110_FIXMOVE_RIGHT_20261109_001943,P03,new,110,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T111_FIXMOVE_RIGHT_20261109_002005,P03,new,111,FIXMOVE,RIGHT,.,pass,distance outside 25-30 cm for 9% of the trial (median 25.2 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P03_T112_FIXMOVE_RIGHT_20261109_002022,P03,new,112,FIXMOVE,RIGHT,.,pass,distance outside 25-30 cm for 27% of the trial (median 25.2 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P03_T113_FIXMOVE_RIGHT_20261109_002044,P03,new,113,FIXMOVE,RIGHT,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T114_FIXSTILL_NONE_20261109_002107,P03,new,114,FIXSTILL,NONE,.,pass,distance outside 25-30 cm for 7% of the trial (median 25.3 cm),primary,,p04_development_after_validation,development,external_validation
+P04-P03_T115_FIXSTILL_NONE_20261109_002130,P03,new,115,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T116_FIXSTILL_NONE_20261109_002146,P03,new,116,FIXSTILL,NONE,.,pass,,primary,,p04_development_after_validation,development,external_validation
+P04-P03_T117_FIXSTILL_NONE_20261109_002202,P03,new,117,FIXSTILL,NONE,.,pass,distance outside 25-30 cm for 57% of the trial (median 24.9 cm),primary,,p04_development_after_validation,development,external_validation
