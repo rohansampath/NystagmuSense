@@ -122,9 +122,14 @@ P02_T004_FIXMOVE_RIGHT_20261104_143220.csv / .json
 P03-P01_T005_OKN_LEFT_20261106_150030.csv / .json
 ```
 
-A trial with a participant (Pilot 03 or 04) writes `{code}-{participant}` in the
-`TEST` field, e.g. `P03-P01`. That already fits contract 1 (`TEST` allows
-`A–Z 0–9 -`), so older receivers accept it and the contract number is unchanged.
+A trial with a participant (Pilots 03–05) writes `{code}-{participant}` in the
+`TEST` field, e.g. `P03-P01`. That already fit contract 1 (`TEST` allows
+`A–Z 0–9 -`).
+
+**Contract 2** adds one optional field after the direction for Pilot 05
+contrast trials: `_C###`, the nominal Michelson contrast in whole percent, e.g.
+`P05-P01_T120_OKN_LEFT_C020_20261113_150100`. Every contract-1 name is still
+valid. A contract-1 receiver refuses P05 names, and **Test Connection** warns.
 
 | Test Type (menu) | Code | Purpose |
 |---|---|---|
@@ -138,6 +143,7 @@ A trial with a participant (Pilot 03 or 04) writes `{code}-{participant}` in the
 | Pilot 02 | `P02` | Formal next pilot recordings |
 | Pilot 03 | `P03` | High-contrast OKN validation, participants `P01`/`P02`; constant white background (see [docs/PILOT_03.md](docs/PILOT_03.md)) |
 | Pilot 04 | `P04` | External validation of the frozen Pilot 03 detector, participants `P01`/`P02`/`P03`; same stimulus as Pilot 03 (see [docs/PILOT_04.md](docs/PILOT_04.md)) |
+| Pilot 05 | `P05` | Contrast-response feasibility: regular OKN at nominal Michelson contrasts 0–80 % with constant mean luminance; names add `_C###` (file-name contract 2; see [docs/PILOT_05.md](docs/PILOT_05.md)) |
 
 - **Timestamp:** the recording start in **UTC**, the same instant as
   `startedAt` in the JSON.
@@ -156,7 +162,7 @@ A trial with a participant (Pilot 03 or 04) writes `{code}-{participant}` in the
 - **Older recordings** keep their names (`NS_<date>_<id>_<mode>`, and schema 4
   `EXP_T…`). The receiver and every script still accept them.
 
-The sidecar (schema 6) adds:
+The sidecar (schema 6; schema 7 adds `stimulus.michelsonContrast` and `stimulus.meanRelativeLuminance` for Pilot 05) adds:
 - `experimentID` (the test-type code), `testTypeName`, `trialNumber`,
   `recordingName`;
 - schema 6: `participantID` (Pilot 03) and `directionCode` (`RIGHT` / `LEFT` /

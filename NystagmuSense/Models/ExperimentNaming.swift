@@ -21,6 +21,7 @@ enum TestType: String, CaseIterable, Identifiable {
     case pilot02         = "P02"
     case pilot03         = "P03"
     case pilot04         = "P04"
+    case pilot05         = "P05"
 
     var id: String { rawValue }
     var code: String { rawValue }
@@ -37,6 +38,7 @@ enum TestType: String, CaseIterable, Identifiable {
         case .pilot02:         return "Pilot 02"
         case .pilot03:         return "Pilot 03"
         case .pilot04:         return "Pilot 04"
+        case .pilot05:         return "Pilot 05"
         }
     }
 
@@ -45,7 +47,7 @@ enum TestType: String, CaseIterable, Identifiable {
     var participants: [Participant] {
         switch self {
         case .pilot03: return [.p01, .p02]
-        case .pilot04: return [.p01, .p02, .p03]
+        case .pilot04, .pilot05: return [.p01, .p02, .p03]
         default:       return []
         }
     }
@@ -56,6 +58,10 @@ enum TestType: String, CaseIterable, Identifiable {
     /// Pilots 03 and 04 keep a constant white background (black bars, full
     /// contrast) instead of the default white → black fade. Nil keeps the fade.
     var fixedBackgroundGray: Double? { self == .pilot03 || self == .pilot04 ? 1 : nil }
+
+    /// Pilot 05 records regular OKN trials at a chosen nominal contrast
+    /// (GratingLuminance); the background comes from the contrast instead.
+    var usesContrast: Bool { self == .pilot05 }
 }
 
 /// Pseudonymous participant codes. Names are never stored on the phone.
@@ -73,21 +79,36 @@ struct TrialSelection: Equatable {
     let testType: TestType
     /// Only kept for test types that offer that participant.
     let participant: Participant?
+    /// Only kept for test types that use contrast (Pilot 05).
+    let contrast: NominalContrast?
 
-    init(testType: TestType, participant: Participant?) {
+    init(testType: TestType, participant: Participant?, contrast: NominalContrast? = nil) {
         self.testType = testType
         self.participant = participant.flatMap { testType.participants.contains($0) ? $0 : nil }
+        self.contrast = testType.usesContrast ? contrast : nil
     }
 
-    var isComplete: Bool { !testType.requiresParticipant || participant != nil }
+    var isComplete: Bool {
+        (!testType.requiresParticipant || participant != nil) && (!testType.usesContrast || contrast != nil)
+    }
+
+    /// What the menu asks for while the selection is incomplete.
+    var missingChoice: String? {
+        if testType.requiresParticipant && participant == nil { return "Choose the participant" }
+        if testType.usesContrast && contrast == nil { return "Choose the contrast" }
+        return nil
+    }
 }
 
-/// File-name contract, version 1, shared with scripts/receive_recordings.py
+/// File-name contract, version 2, shared with scripts/receive_recordings.py
 /// (STEM_RE) and checked on both sides against
 /// scripts/tests/fixtures/recording_names.json:
 ///
-///     {TEST}_T{trial ≥3 digits}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}
+///     {TEST}_T{trial ≥3 digits}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}[_C{contrast %, 3 digits}]_{UTC yyyyMMdd_HHmmss}
 ///
+/// Version 2 only adds the optional contrast field (Pilot 05, e.g.
+/// `P05-P01_T120_OKN_LEFT_C020_…` = nominal 20 % Michelson contrast); every
+/// version-1 name is still a valid version-2 name.
 /// e.g. `DIR_T001_OKN_RIGHT_20261104_143022`. TEST is upper-case letters,
 /// digits or "-", 1–16 characters: the test-type code, followed by
 /// `-{participant}` when the trial has one (`P03-P01_T041_OKN_LEFT_…`,
@@ -96,7 +117,7 @@ struct TrialSelection: Equatable {
 /// folder, CSV and JSON share it.
 struct RecordingName: Equatable {
     /// Bump together with the receiver's NAME_CONTRACT when the format changes.
-    static let contractVersion = 1
+    static let contractVersion = 2
 
     let experimentID: String
     /// Pseudonymous code such as P01; nil for test types without participants.
@@ -105,6 +126,8 @@ struct RecordingName: Equatable {
     let mode: StimulusConfig.TrialMode
     /// Nil when the stripes never move (written as NONE).
     let direction: StimulusConfig.Direction?
+    /// Nominal contrast in whole percent for contrast trials (written as C###); nil otherwise.
+    let contrastPercent: Int?
     let startedAt: Date
 
     init(experimentID: String, participantID: String? = nil, trialNumber: Int, stimulus: StimulusConfig,
@@ -114,6 +137,7 @@ struct RecordingName: Equatable {
         self.trialNumber   = trialNumber
         self.mode         = stimulus.trialMode
         self.direction    = stimulus.isMoving ? stimulus.direction : nil
+        self.contrastPercent = stimulus.michelsonContrast.map { Int(($0 * 100).rounded()) }
         self.startedAt    = startedAt
     }
 
@@ -129,9 +153,13 @@ struct RecordingName: Equatable {
         }
     }
 
-    var stem: String {
-        "\(testField)_\(Self.trialLabel(trialNumber))_\(mode.nameCode)_\(directionCode)_\(Self.utc.string(from: startedAt))"
+    /// The fields before the timestamp, e.g. `P05-P01_T120_OKN_LEFT_C020`.
+    var label: String {
+        let contrast = contrastPercent.map { "_" + NominalContrast.nameCode(percent: $0) } ?? ""
+        return "\(testField)_\(Self.trialLabel(trialNumber))_\(mode.nameCode)_\(directionCode)\(contrast)"
     }
+
+    var stem: String { "\(label)_\(Self.utc.string(from: startedAt))" }
 
     static func trialLabel(_ n: Int) -> String {
         let digits = String(n)
@@ -153,6 +181,7 @@ struct RecordingName: Equatable {
 struct ExperimentLog {
     static let testTypeKey = "experiment.testType"
     static let participantKey = "experiment.participant"
+    static let contrastKey = "experiment.contrast"
     private static let nextTrialKey = "recording.nextTrial"
     /// Per-experiment counters written by the earlier free-text ID version.
     private static let legacyCounterPrefix = "experiment.nextTrial."
@@ -166,7 +195,12 @@ struct ExperimentLog {
     /// Last participant chosen on the menu; nil until one is picked.
     var participant: Participant? { Participant(rawValue: defaults.string(forKey: Self.participantKey) ?? "") }
 
-    var selection: TrialSelection { TrialSelection(testType: testType, participant: participant) }
+    /// Last contrast chosen on the menu (Pilot 05); nil until one is picked.
+    var contrast: NominalContrast? {
+        defaults.object(forKey: Self.contrastKey) == nil ? nil : NominalContrast(rawValue: defaults.integer(forKey: Self.contrastKey))
+    }
+
+    var selection: TrialSelection { TrialSelection(testType: testType, participant: participant, contrast: contrast) }
 
     /// The number the next saved recording gets. Never below any number already
     /// used on this phone, including by the earlier per-experiment counters.

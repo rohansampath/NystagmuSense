@@ -65,7 +65,10 @@ struct SessionMetadata: Codable, Equatable {
     /// 6: adds participantID (Pilot 03; also Pilot 04, unchanged schema), which also follows the code in the
     ///    stem's first field (`P03-P01_…`), and directionCode, the stem's
     ///    direction field (NONE for still stripes).
-    var schemaVersion = 6
+    /// 7: adds stimulus.michelsonContrast and stimulus.meanRelativeLuminance
+    ///    (Pilot 05 nominal-contrast gratings) and the optional _C### field of
+    ///    recordingName (file-name contract 2).
+    var schemaVersion = 7
     let sessionID: UUID
     let startedAt: Date
     let device: DeviceInfo
@@ -135,16 +138,23 @@ struct SessionMetadata: Codable, Equatable {
         "startedAt": "recording start, ISO 8601 UTC; also the timestamp in recordingName",
         "experimentID": "test-type code chosen on the menu, e.g. DIR (schema 5+); free-text experiment ID in schema 4",
         "testTypeName": "display name of that test type, e.g. Direction Test (schema 5+)",
-        "participantID": "pseudonymous participant code chosen before the trial, e.g. P01 (Pilot 03 and 04; "
+        "participantID": "pseudonymous participant code chosen before the trial, e.g. P01 (Pilots 03-05; "
             + "schema 6+); absent for test types without participants",
         "directionCode": "RIGHT, LEFT or NONE, the direction field of recordingName; NONE when the stripes "
             + "don't move, whatever stimulus.direction says (schema 6+)",
         "trialNumber": "trial counter shared by all test types on this phone, advanced when a recording is "
             + "saved locally; never reused (schema 5+; per experiment ID in schema 4)",
         "recordingName": "stem shared by the folder, CSV and JSON: "
-            + "{experimentID}[-{participantID}]_T{trial:03}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_"
-            + "{UTC yyyyMMdd_HHmmss} (file-name contract 1); "
+            + "{experimentID}[-{participantID}]_T{trial:03}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}"
+            + "[_C{nominal contrast %, 3 digits}]_{UTC yyyyMMdd_HHmmss} (file-name contract 2; "
+            + "the contrast field only for contrast trials, schema 7+); "
             + "legacy NS_ stem when no experiment name was assigned",
+        "stimulus.michelsonContrast": "Pilot 05: NOMINAL Michelson contrast 0..1 of the grating, "
+            + "(Lmax - Lmin)/(Lmax + Lmin) on relative luminance under an assumed sRGB display curve; "
+            + "not photometrically measured; absent for other test types (schema 7+)",
+        "stimulus.meanRelativeLuminance": "Pilot 05: area-weighted mean relative luminance (0..1 of display "
+            + "white) held constant across contrasts; fixedBackgroundGray and stripeGray hold the derived "
+            + "sRGB code values (schema 7+)",
         "faceDistance": "approximate front-camera-to-eye-midpoint distance from ARKit, cm, uncalibrated; "
             + "check = passed / bypassed / notPerformed for the pre-trial positioning gate",
     ]

@@ -66,6 +66,13 @@ struct StimulusConfig: Codable, Equatable {
     /// Black bars match the white → black background fade in the paper.
     var stripeGray: Double = 0
     var trialMode: TrialMode = .okn
+    /// Pilot 05: nominal Michelson contrast (0…1) of a constant-mean-luminance
+    /// grating (GratingLuminance); nil for the earlier black-bar stimuli.
+    /// fixedBackgroundGray / stripeGray then hold the derived code values.
+    var michelsonContrast: Double? = nil
+    /// Pilot 05: relative luminance (0…1 of display white) held constant
+    /// across contrasts, under the assumed sRGB display curve.
+    var meanRelativeLuminance: Double? = nil
 
     init() {}
 
@@ -83,6 +90,7 @@ struct StimulusConfig: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case stripeWidthRatio, pitchToWidthRatio, speedPointsPerSecond, direction
         case fadeHalfCycleSeconds, fixedBackgroundGray, stripeGray, trialMode
+        case michelsonContrast, meanRelativeLuminance
     }
 
     /// Old sidecars describe black stripes over a fading background.
@@ -97,12 +105,19 @@ struct StimulusConfig: Codable, Equatable {
         stripeGray = try c.decodeIfPresent(Double.self, forKey: .stripeGray) ?? 0
         // Sidecars before schema 3 were all OKN trials.
         trialMode = try c.decodeIfPresent(TrialMode.self, forKey: .trialMode) ?? .okn
+        michelsonContrast = try c.decodeIfPresent(Double.self, forKey: .michelsonContrast)
+        meanRelativeLuminance = try c.decodeIfPresent(Double.self, forKey: .meanRelativeLuminance)
     }
 }
 
 extension StimulusConfig {
     /// What the participant is told to watch, derived from the configured stimulus.
     var participantInstruction: String {
+        // Contrast trials: one instruction for every level, naming neither the
+        // bars nor their direction (at 0 % there is nothing visible to name).
+        if michelsonContrast != nil {
+            return "Keep your head still and watch the screen."
+        }
         if trialMode.showsFixationDot {
             return "Keep your head still and keep looking at the red dot."
         }
