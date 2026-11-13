@@ -25,7 +25,7 @@ slow-phase data) counts as negative: no evidence of OKN.
 Thresholds: leave-one-participant-out (P01, P02, P03; P01/P02 appear in both
 pilots, so their folds hold out both pilots' recordings of that person). On
 the two training participants, each rule's threshold is the training score
-value that maximises balanced accuracy (ties: the median of the tied values);
+value that maximises balanced accuracy (ties: the median of the tied values if optimal, otherwise the lower middle tied value);
 D uses B's and C's thresholds chosen separately. ROC-AUC (Mann-Whitney) is
 reported for the continuous scores, needing no threshold.
 
@@ -109,7 +109,10 @@ def best_threshold(pos, neg):
     ba = lambda t: (np.mean([positive(v, t) for v in pos]) + np.mean([not positive(v, t) for v in neg])) / 2
     scores = [ba(t) for t in cands]
     tied = [t for t, s in zip(cands, scores) if s >= max(scores) - 1e-12]
-    return float(np.median(tied))
+    median = float(np.median(tied))
+    # Separated optima can straddle a worse decision boundary. Never let
+    # averaging tied thresholds defeat the balanced-accuracy selection rule.
+    return median if ba(median) >= max(scores) - 1e-12 else float(tied[(len(tied) - 1) // 2])
 
 
 def predict(rule, row, thr):

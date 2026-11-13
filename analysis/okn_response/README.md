@@ -148,6 +148,15 @@ weak drift (0.04–0.78 deg/s in 5 of 8), so the strict threshold misses them.
 4. **Fast-phase rate is the weakest of the three measures,** most hurt by one
    participant's saccades.
 
+### Review correction
+
+Threshold ties use their median only when it still maximises training balanced
+accuracy; otherwise they use the lower middle tied threshold. Averaging disjoint
+optima can otherwise select a worse decision boundary. The committed result
+files retain the original run; a rerun requires the private raw recordings.
+Event-level F1 (Pilot 04: 0.54) and trial-level AUC (0.97 here) score different
+tasks and targets and must not be interpreted as a direct accuracy improvement.
+
 ## Limitations
 
 - **Condition, not ground truth:** OKN and still-stripe trials differ in

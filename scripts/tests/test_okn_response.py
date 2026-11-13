@@ -119,6 +119,14 @@ class Classification(unittest.TestCase):
         self.assertTrue(2 < thr <= 3)
         self.assertFalse(ar.positive(None, -1e9))
 
+    def test_disjoint_tied_thresholds_keep_maximal_training_accuracy(self):
+        pos, neg = [1, 3], [2, 4]
+        threshold = ar.best_threshold(pos, neg)
+        accuracy = lambda t: (sum(ar.positive(v, t) for v in pos) / len(pos) +
+                              sum(not ar.positive(v, t) for v in neg) / len(neg)) / 2
+        self.assertEqual(accuracy(threshold), max(accuracy(t) for t in pos + neg))
+        self.assertNotEqual(threshold, 2)  # averaging the tied optima 1 and 3 is worse
+
     def test_confusion_counts_only_okn_and_still(self):
         rows = [dict(condition="OKN", aligned_slow_median=2.0), dict(condition="OKN", aligned_slow_median=None),
                 dict(condition="FIXSTILL", aligned_slow_median=0.1), dict(condition="FIXMOVE", aligned_slow_median=5.0)]
