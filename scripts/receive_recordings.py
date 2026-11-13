@@ -27,6 +27,7 @@ import argparse
 import hmac
 import http.server
 import json
+import math
 import os
 import re
 import shutil
@@ -40,19 +41,23 @@ DEFAULT_PORT = 8765
 DEFAULT_TRIALS_DIR = Path(__file__).resolve().parents[1] / "trials"
 # A 10 s recording is ~100 KB; this leaves plenty of room for longer sessions.
 MAX_BODY_BYTES = 10 * 1024 * 1024
-# File-name contract 1, shared with RecordingName in ExperimentNaming.swift and
+# File-name contract 2, shared with RecordingName in ExperimentNaming.swift and
 # checked on both sides against tests/fixtures/recording_names.json:
-#   {TEST}_T{###}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}
+#   {TEST}_T{###}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}[_C{###}]_{UTC yyyyMMdd_HHmmss}
+#   (version 2 only adds the optional contrast field: C + nominal Michelson
+#   contrast in whole percent, 3 digits, e.g. P05-P01_T120_OKN_LEFT_C020_...;
+#   every version-1 name is still valid)
 #   e.g. DIR_T001_OKN_RIGHT_20261104_143022 (TEST: A-Z, 0-9, '-', 1-16 chars;
 #   a trial with a participant is {code}-{participant}, e.g. P03-P01_T041_...);
 # or the legacy SessionRecorder.fileStem NS_<yyyyMMdd-HHmmss>_<8 hex>[_<mode>].
-NAME_CONTRACT = 1
+NAME_CONTRACT = 2
 STEM_RE = re.compile(
-    r"[A-Z0-9-]{1,16}_T\d{3,}_(?:OKN|FIXMOVE|FIXSTILL)_(?:RIGHT|LEFT|NONE)_\d{8}_\d{6}"
+    r"[A-Z0-9-]{1,16}_T\d{3,}_(?:OKN|FIXMOVE|FIXSTILL)_(?:RIGHT|LEFT|NONE)(?:_C\d{3})?_\d{8}_\d{6}"
     r"|NS_\d{8}-\d{6}_[0-9A-Fa-f]{8}(?:_[a-z]+)?")
 # Pilot and participant codes use the digit zero (P04, P01). A letter O
 # (PO4, PO1) can only come from hand typing, so it is refused, not filed apart.
 LETTER_O_CODE_RE = re.compile(r"(?:^|-)PO\d")
+CONTRAST_FIELD_RE = re.compile(r"_C(\d{3})_\d{8}_\d{6}$")
 
 
 class UploadError(Exception):
@@ -95,6 +100,19 @@ def parse_recording(body):
             not stem.startswith(f"{meta.get('experimentID')}-{meta['participantID']}_"):
         raise UploadError(400, "metadata participantID does not match the file name", "mismatched_metadata",
                           detail=repr(str(meta["participantID"])[:20]))
+    # Contrast trials (contract 2): the name's C### and the sidecar's nominal
+    # contrast must agree. Checked whenever the sidecar describes its stimulus.
+    stimulus = meta.get("stimulus")
+    field = CONTRAST_FIELD_RE.search(stem)
+    contrast = stimulus.get("michelsonContrast") if isinstance(stimulus, dict) else None
+    if field or contrast is not None:
+        named = int(field[1]) if field else None
+        valid = (type(contrast) in (int, float) and math.isfinite(contrast)
+                 and 0 <= contrast <= 1 and named is not None
+                 and math.isclose(contrast, named / 100, rel_tol=0, abs_tol=1e-9))
+        if not valid:
+            raise UploadError(400, "metadata contrast does not match the file name", "mismatched_metadata",
+                              detail=f"name {named!r} metadata {contrast!r}")
     return stem, csv_text, json_text
 
 

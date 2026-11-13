@@ -118,8 +118,11 @@ struct RecordingUploaderTests {
     }
 
     @Test func healthReportsWhetherTheReceiverKnowsTheNameContract() async throws {
-        let current = try await stubbedUploader(status: 200, body: #"{"status":"ok","name_contract":1}"#).checkHealth()
+        let current = try await stubbedUploader(status: 200, body: #"{"status":"ok","name_contract":2}"#).checkHealth()
         #expect(current.acceptsThisAppsNames)
+        // A contract-1 receiver would refuse Pilot 05's contrast field: Test Connection must warn.
+        let previous = try await stubbedUploader(status: 200, body: #"{"status":"ok","name_contract":1}"#).checkHealth()
+        #expect(!previous.acceptsThisAppsNames)
         let old = try await stubbedUploader(status: 200, body: #"{"status":"ok"}"#).checkHealth()
         #expect(old.nameContract == nil && !old.acceptsThisAppsNames)
     }

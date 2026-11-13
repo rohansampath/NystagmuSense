@@ -56,6 +56,7 @@ struct ExperimentNamingTests {
         struct Case: Decodable {
             let testType: String
             let participant: String?
+            let contrast: Int?
             let trial: Int
             let mode: String
             let direction: String
@@ -85,11 +86,14 @@ struct ExperimentNamingTests {
             let direction = try #require(StimulusConfig.Direction(rawValue: c.direction))
             let type = try #require(TestType(rawValue: c.testType), "unknown test type \(c.testType)")
             let participant = try c.participant.map { try #require(Participant(rawValue: $0)) }
-            let selection = TrialSelection(testType: type, participant: participant)
+            let contrast = try c.contrast.map { try #require(NominalContrast(rawValue: $0)) }
+            let selection = TrialSelection(testType: type, participant: participant, contrast: contrast)
             #expect(selection.isComplete)
             let name = RecordingName(experimentID: type.code, participantID: selection.participant?.rawValue,
                                      trialNumber: c.trial,
-                                     stimulus: StimulusConfig(mode: mode, direction: direction), startedAt: c.startedAt)
+                                     stimulus: TestView.stimulusConfig(mode: mode, direction: direction,
+                                                                       selection: selection),
+                                     startedAt: c.startedAt)
             #expect(name.stem == c.name)
         }
         // Every selectable test type is covered, so the receiver is tested with it.
@@ -111,7 +115,7 @@ struct ExperimentNamingTests {
             (.blink, "BLINK", "Blink Test"), (.oknDetection, "OKNTEST", "OKN Detection"),
             (.direction, "DIR", "Direction Test"), (.fixationControl, "FIX", "Fixation Control"),
             (.distance, "DIST", "Distance Test"), (.pilot02, "P02", "Pilot 02"), (.pilot03, "P03", "Pilot 03"),
-            (.pilot04, "P04", "Pilot 04"),
+            (.pilot04, "P04", "Pilot 04"), (.pilot05, "P05", "Pilot 05"),
         ]
         #expect(TestType.allCases.count == expected.count)
         for (type, code, name) in expected {
@@ -174,7 +178,7 @@ struct ExperimentNamingTests {
         #expect(files.metadata.lastPathComponent == stem + ".json")
 
         let meta = try decode(files.metadata)
-        #expect(meta.schemaVersion == 6)
+        #expect(meta.schemaVersion == 7)
         #expect(meta.experimentID == "P02")
         #expect(meta.testTypeName == "Pilot 02")
         #expect(meta.trialNumber == 7)
@@ -203,7 +207,7 @@ struct ExperimentNamingTests {
             let files = try r.export(to: dir, device: device)
             #expect(files.csv.lastPathComponent == stem + ".csv" && files.metadata.lastPathComponent == stem + ".json")
             let meta = try decode(files.metadata)
-            #expect(meta.schemaVersion == 6)
+            #expect(meta.schemaVersion == 7)
             #expect(meta.experimentID == "P03" && meta.testTypeName == "Pilot 03")
             #expect(meta.participantID == participant.rawValue)
             #expect(meta.directionCode == code)
@@ -211,12 +215,14 @@ struct ExperimentNamingTests {
         }
     }
 
-    @Test func onlyPilots03And04NeedAParticipantAndAFixedBackground() {
+    @Test func pilotsNeedAParticipantAndOnlyPilots03And04AFixedWhiteBackground() {
         for type in TestType.allCases {
             let pilot = type == .pilot03 || type == .pilot04
-            #expect(type.requiresParticipant == pilot)
+            #expect(type.requiresParticipant == (pilot || type == .pilot05))
             #expect(type.fixedBackgroundGray == (pilot ? 1 : nil))
+            #expect(type.usesContrast == (type == .pilot05))
         }
+        #expect(TestType.pilot05.participants == [.p01, .p02, .p03])
         #expect(TestType.pilot03.participants == [.p01, .p02])
         #expect(TestType.pilot04.participants == [.p01, .p02, .p03])
         #expect(TestType.pilot04.code == "P04")                     // digit zero, never "PO4"
@@ -254,7 +260,7 @@ struct ExperimentNamingTests {
             #expect(files.directory.lastPathComponent == stem)
             #expect(files.csv.lastPathComponent == stem + ".csv" && files.metadata.lastPathComponent == stem + ".json")
             let meta = try decode(files.metadata)
-            #expect(meta.schemaVersion == 6)
+            #expect(meta.schemaVersion == 7)
             #expect(meta.experimentID == "P04" && meta.testTypeName == "Pilot 04")
             #expect(meta.participantID == participant.rawValue)
             #expect(meta.directionCode == code)

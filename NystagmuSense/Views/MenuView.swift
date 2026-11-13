@@ -11,6 +11,7 @@ struct MenuView: View {
     @EnvironmentObject private var vm: MenuViewModel
     @AppStorage(ExperimentLog.testTypeKey) private var testTypeCode = TestType.general.code
     @AppStorage(ExperimentLog.participantKey) private var participantCode = ""
+    @AppStorage(ExperimentLog.contrastKey) private var contrastCode = -1
 
     var body: some View {
         NavigationStack {
@@ -35,14 +36,23 @@ struct MenuView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 70 * CGFloat(selection.testType.participants.count) + 80)
                     }
-                    Picker("Condition", selection: $vm.trialMode) {
-                        Text("OKN").tag(StimulusConfig.TrialMode.okn)
-                        Text("Dot + moving").tag(StimulusConfig.TrialMode.fixationMovingStripes)
-                        Text("Dot + still").tag(StimulusConfig.TrialMode.fixationStillStripes)
+                    if selection.testType.usesContrast {
+                        // Pilot 05: regular OKN only; the experimenter picks the nominal contrast.
+                        Picker("Contrast", selection: contrast) {
+                            ForEach(NominalContrast.allCases) { Text($0.label).tag(Optional($0)) }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 360)
+                    } else {
+                        Picker("Condition", selection: $vm.trialMode) {
+                            Text("OKN").tag(StimulusConfig.TrialMode.okn)
+                            Text("Dot + moving").tag(StimulusConfig.TrialMode.fixationMovingStripes)
+                            Text("Dot + still").tag(StimulusConfig.TrialMode.fixationStillStripes)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 330)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 330)
-                    if vm.trialMode == .fixationStillStripes {
+                    if trialMode == .fixationStillStripes {
                         Text("Direction: none (still stripes)").font(.subheadline).foregroundStyle(.secondary)
                             .frame(height: 32)
                     } else {
@@ -53,7 +63,7 @@ struct MenuView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 220)
                     }
-                    Text(selection.isComplete ? "Next: \(nextTrialLabel)" : "Choose the participant")
+                    Text(selection.missingChoice ?? "Next: \(nextTrialLabel)")
                         .font(.caption.monospaced())
                         .foregroundStyle(selection.isComplete ? Color.secondary : Color.red)
                 }
@@ -65,7 +75,7 @@ struct MenuView: View {
             }
             .navigationDestination(isPresented: $vm.showHistory)   { HistoryView() }
             .navigationDestination(isPresented: $vm.showCountdown) {
-                TestView(mode: vm.trialMode, direction: vm.direction, selection: selection)
+                TestView(mode: trialMode, direction: vm.direction, selection: selection)
             }
             .navigationDestination(isPresented: $vm.showTransfer)  { TransferSettingsView() }
         }
@@ -81,9 +91,20 @@ struct MenuView: View {
                 set: { participantCode = $0?.rawValue ?? "" })
     }
 
+    private var contrast: Binding<NominalContrast?> {
+        Binding(get: { NominalContrast(rawValue: contrastCode) },
+                set: { contrastCode = $0?.rawValue ?? -1 })
+    }
+
     private var selection: TrialSelection {
         TrialSelection(testType: TestType(rawValue: testTypeCode) ?? .general,
-                       participant: Participant(rawValue: participantCode))
+                       participant: Participant(rawValue: participantCode),
+                       contrast: NominalContrast(rawValue: contrastCode))
+    }
+
+    /// Pilot 05 trials are always regular OKN, whatever the condition picker last held.
+    private var trialMode: StimulusConfig.TrialMode {
+        selection.testType.usesContrast ? .okn : vm.trialMode
     }
 
     /// The saved name without its timestamp. Re-read on every render, so it
@@ -92,8 +113,9 @@ struct MenuView: View {
         let name = RecordingName(experimentID: selection.testType.code,
                                  participantID: selection.participant?.rawValue,
                                  trialNumber: ExperimentLog().nextTrialNumber,
-                                 stimulus: StimulusConfig(mode: vm.trialMode, direction: vm.direction),
+                                 stimulus: TestView.stimulusConfig(mode: trialMode, direction: vm.direction,
+                                                                   selection: selection),
                                  startedAt: Date())
-        return "\(name.testField)_\(RecordingName.trialLabel(name.trialNumber))_\(name.mode.nameCode)_\(name.directionCode)"
+        return name.label
     }
 }

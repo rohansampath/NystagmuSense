@@ -1,6 +1,6 @@
 {
-  "contract_version": 1,
-  "contract": "{TEST}_T{trial, zero-padded to 3+ digits}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}_{UTC yyyyMMdd_HHmmss}; TEST = upper-case letters, digits or '-', 1-16 characters (the app writes a predefined test-type code, followed by -{participant} when the trial has one, e.g. P03-P01 or P04-P03; codes use the digit zero, and PO4/PO1 with a letter O are rejected). Legacy: NS_{yyyyMMdd-HHmmss}_{8 hex}[_{lower-case mode}]. CSV and JSON share the name; only the extension differs.",
+  "contract_version": 2,
+  "contract": "{TEST}_T{trial, zero-padded to 3+ digits}_{OKN|FIXMOVE|FIXSTILL}_{RIGHT|LEFT|NONE}[_C{nominal Michelson contrast in whole percent, 3 digits}]_{UTC yyyyMMdd_HHmmss}; version 2 adds only the optional contrast field (Pilot 05); TEST = upper-case letters, digits or '-', 1-16 characters (the app writes a predefined test-type code, followed by -{participant} when the trial has one, e.g. P03-P01 or P04-P03; codes use the digit zero, and PO4/PO1 with a letter O are rejected). Legacy: NS_{yyyyMMdd-HHmmss}_{8 hex}[_{lower-case mode}]. CSV and JSON share the name; only the extension differs.",
   "generated": [
     {"testType": "DIR",     "trial": 1,    "mode": "okn",                   "direction": "rightward", "startedAt": "2026-11-04T14:30:22Z", "name": "DIR_T001_OKN_RIGHT_20261104_143022"},
     {"testType": "DIR",     "trial": 2,    "mode": "okn",                   "direction": "leftward",  "startedAt": "2026-11-04T14:31:05Z", "name": "DIR_T002_OKN_LEFT_20261104_143105"},
@@ -22,7 +22,11 @@
     {"testType": "P04", "participant": "P02", "trial": 62, "mode": "okn",                   "direction": "leftward",  "startedAt": "2026-11-09T15:00:30Z", "name": "P04-P02_T062_OKN_LEFT_20261109_150030"},
     {"testType": "P04", "participant": "P03", "trial": 63, "mode": "fixationMovingStripes", "direction": "rightward", "startedAt": "2026-11-09T15:01:00Z", "name": "P04-P03_T063_FIXMOVE_RIGHT_20261109_150100"},
     {"testType": "P04", "participant": "P01", "trial": 64, "mode": "fixationMovingStripes", "direction": "leftward",  "startedAt": "2026-11-09T15:01:30Z", "name": "P04-P01_T064_FIXMOVE_LEFT_20261109_150130"},
-    {"testType": "P04", "participant": "P03", "trial": 65, "mode": "fixationStillStripes",  "direction": "rightward", "startedAt": "2026-11-09T15:02:00Z", "name": "P04-P03_T065_FIXSTILL_NONE_20261109_150200"}
+    {"testType": "P04", "participant": "P03", "trial": 65, "mode": "fixationStillStripes",  "direction": "rightward", "startedAt": "2026-11-09T15:02:00Z", "name": "P04-P03_T065_FIXSTILL_NONE_20261109_150200"},
+    {"testType": "P05", "participant": "P01", "contrast": 0,  "trial": 120, "mode": "okn", "direction": "leftward",  "startedAt": "2026-11-13T15:00:00Z", "name": "P05-P01_T120_OKN_LEFT_C000_20261113_150000"},
+    {"testType": "P05", "participant": "P02", "contrast": 5,  "trial": 121, "mode": "okn", "direction": "rightward", "startedAt": "2026-11-13T15:00:30Z", "name": "P05-P02_T121_OKN_RIGHT_C005_20261113_150030"},
+    {"testType": "P05", "participant": "P01", "contrast": 20, "trial": 122, "mode": "okn", "direction": "leftward",  "startedAt": "2026-11-13T15:01:00Z", "name": "P05-P01_T122_OKN_LEFT_C020_20261113_150100"},
+    {"testType": "P05", "participant": "P03", "contrast": 80, "trial": 123, "mode": "fixationStillStripes", "direction": "rightward", "startedAt": "2026-11-13T15:01:30Z", "name": "P05-P03_T123_OKN_RIGHT_C080_20261113_150130"}
   ],
   "legacy_valid": [
     "NS_20261024-101500_ABCD1234",
@@ -54,6 +58,11 @@
     "P03-ASHWIN-AGGARWAL_T041_OKN_RIGHT_20261106_150000",
     "PO4-P01_T061_OKN_RIGHT_20261109_150000",
     "P04-PO1_T061_OKN_RIGHT_20261109_150000",
-    "P04-P01_T061_FIXMOV_RIGHT_20261109_150000"
+    "P04-P01_T061_FIXMOV_RIGHT_20261109_150000",
+    "P05-P01_T120_OKN_LEFT_C20_20261113_150000",
+    "P05-P01_T120_OKN_LEFT_C0200_20261113_150000",
+    "P05-P01_T120_OKN_LEFT_c020_20261113_150000",
+    "P05-P01_T120_C020_OKN_LEFT_20261113_150000",
+    "P05-P01_T120_OKN_LEFT_20261113_150000_C020"
   ]
 }

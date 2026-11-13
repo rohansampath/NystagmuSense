@@ -43,7 +43,9 @@ itself a calibrated contrast-sensitivity measurement.
 | CSV + JSON export (share sheet / Files app) | Real schema-v1 device exports are checked in; new recordings use schema v2 with surface size and stripe/background settings |
 | Python plotting (`scripts/plot_gaze.py`) | Tested on synthetic data and checked-in real device recordings |
 | OKN detection | **Candidate only, offline:** `scripts/detect_okn.py` (Savitzky–Golay baseline). The Pilot 03 detector (SG + stimulus direction, 22 deg/s) is frozen and was scored once on held-out data: F1 0.56 overall, 0.82 on OKN trials (see [Pilot 03 results](#pilot-03-results)). Not in the app; legacy Swift heuristic in `Services/Analysis/` stays disabled |
-| Pilot 04 | Recording protocol, app test type and manifest builder are ready; external-validation recordings for `P01`–`P03` are not yet collected (see [Pilot 04](#pilot-04-external-validation)) |
+| Pilot 04 | Completed: 60 recordings from `P01`–`P03`; frozen event detector F1 0.54 overall and 0.78 on regular OKN. Exploratory tuning did not justify changing it (see [validation summary](analysis/pilot_04/validation/validation_summary.md)) |
+| Trial-level response | Exploratory slow-phase velocity: AUC 0.968 for OKN vs still controls; participant-held-out sensitivity 34/40 and specificity 24/24. Different task from event F1; only three participants ([analysis](analysis/okn_response/README.md)) |
+| Pilot 05 | Nominal contrast recording and analysis are ready for a small feasibility study; no Pilot 05 data or calibrated contrast-sensitivity result yet ([protocol](docs/PILOT_05.md)) |
 | Contrast-sensitivity score | **Removed from the test flow.** "Past Tests" shows only legacy prototype scores |
 
 Architecture, timing and data-model details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -122,9 +124,14 @@ P02_T004_FIXMOVE_RIGHT_20261104_143220.csv / .json
 P03-P01_T005_OKN_LEFT_20261106_150030.csv / .json
 ```
 
-A trial with a participant (Pilot 03 or 04) writes `{code}-{participant}` in the
-`TEST` field, e.g. `P03-P01`. That already fits contract 1 (`TEST` allows
-`A–Z 0–9 -`), so older receivers accept it and the contract number is unchanged.
+A trial with a participant (Pilots 03–05) writes `{code}-{participant}` in the
+`TEST` field, e.g. `P03-P01`. That already fit contract 1 (`TEST` allows
+`A–Z 0–9 -`).
+
+**Contract 2** adds one optional field after the direction for Pilot 05
+contrast trials: `_C###`, the nominal Michelson contrast in whole percent, e.g.
+`P05-P01_T120_OKN_LEFT_C020_20261113_150100`. Every contract-1 name is still
+valid. A contract-1 receiver refuses P05 names, and **Test Connection** warns.
 
 | Test Type (menu) | Code | Purpose |
 |---|---|---|
@@ -138,6 +145,7 @@ A trial with a participant (Pilot 03 or 04) writes `{code}-{participant}` in the
 | Pilot 02 | `P02` | Formal next pilot recordings |
 | Pilot 03 | `P03` | High-contrast OKN validation, participants `P01`/`P02`; constant white background (see [docs/PILOT_03.md](docs/PILOT_03.md)) |
 | Pilot 04 | `P04` | External validation of the frozen Pilot 03 detector, participants `P01`/`P02`/`P03`; same stimulus as Pilot 03 (see [docs/PILOT_04.md](docs/PILOT_04.md)) |
+| Pilot 05 | `P05` | Contrast-response feasibility: regular OKN at nominal Michelson contrasts 0–80 % with constant mean luminance; names add `_C###` (file-name contract 2; see [docs/PILOT_05.md](docs/PILOT_05.md)) |
 
 - **Timestamp:** the recording start in **UTC**, the same instant as
   `startedAt` in the JSON.
@@ -156,7 +164,7 @@ A trial with a participant (Pilot 03 or 04) writes `{code}-{participant}` in the
 - **Older recordings** keep their names (`NS_<date>_<id>_<mode>`, and schema 4
   `EXP_T…`). The receiver and every script still accept them.
 
-The sidecar (schema 6) adds:
+The sidecar (schema 6; schema 7 adds `stimulus.michelsonContrast` and `stimulus.meanRelativeLuminance` for Pilot 05) adds:
 - `experimentID` (the test-type code), `testTypeName`, `trialNumber`,
   `recordingName`;
 - schema 6: `participantID` (Pilot 03) and `directionCode` (`RIGHT` / `LEFT` /
@@ -669,22 +677,37 @@ development and also requires explicit opt-in for evaluation.
 
 ### Pilot 04 (external validation)
 
-Pilot 04 collects 60 new recordings (`P01` and `P02` returning, `P03` new;
-20 each) with the Pilot 03 stimulus. Its purpose is to test the **frozen** Pilot
-03 detector on data it was never tuned on. The protocol, session log and
-step-by-step commands are in [docs/PILOT_04.md](docs/PILOT_04.md). In brief:
+Pilot 04 collected 60 recordings (`P01` and `P02` returning, `P03` new;
+20 each). The frozen Pilot 03 detector was evaluated once before exploratory
+tuning: TP 135, FP 74, FN 153, pooled event F1 **0.54** (bootstrap 95 % CI
+0.43–0.65), and **0.78** on regular OKN. The collected balance was four trials
+per condition/direction cell, a documented deviation from the original plan.
+See the [validation summary](analysis/pilot_04/validation/validation_summary.md)
+and [SG study](analysis/pilot_04/optimization/grid_search_summary.md). The
+recommendation remains to keep the frozen detector.
 
-1. Build the manifest with `python3 analysis/pilot_04/build_manifest.py`. Every
-   primary recording is held out (`split=evaluation`).
-2. Annotate without detector suggestions into `analysis/annotations_p04/`
-   (git-ignored and separate from Pilot 03). Check progress for one reviewer
-   with `build_manifest.py --review-status --annotator AA`. If more than one
-   reviewer is present, `--annotator` is required.
-3. Score the frozen detector once (**Report A**) and commit the results
-   unchanged.
-4. Only after that, Pilot 04 may become development data for an exploratory SG
-   hyperparameter study (**Report B**). Report B is never presented as
-   independent validation.
+A subsequent [trial-level response analysis](analysis/okn_response/README.md)
+combined 100 Pilot 03/04 recordings. Aligned slow-phase velocity separated
+regular OKN from still controls with AUC **0.968**; participant-held-out rules
+identified **34/40** OKN trials and rejected **24/24** still controls. Those
+are exploratory condition-classification results, not directly comparable to
+event F1 or evidence of clinical accuracy. Dot + moving had little measurable
+response, consistent with fixation suppressing OKN in these recordings.
+
+Raw recordings and private labels must be supplied locally to rerun the
+analyses. The committed validation outputs remain unchanged.
+
+### Pilot 05 (contrast-response feasibility)
+
+Select **Pilot 05**, participant, contrast (0, 5, 10, 20, 40 or 80 %), and
+direction. Every level uses regular OKN, the same neutral instruction, and a
+nominally constant mean luminance. The recording status card is hidden during
+capture. Update the Mac receiver for file-name contract 2 before recording.
+
+The [protocol](docs/PILOT_05.md) defines the 48-trial P01/P02 plan, checks on a
+physical phone, photometer measurements, manifest building, and exploratory
+response analysis. Contrasts are nominal until measured; no threshold or
+contrast-sensitivity score is produced.
 
 ## Known limitations
 

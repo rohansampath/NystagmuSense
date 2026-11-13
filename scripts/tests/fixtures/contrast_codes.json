@@ -1,0 +1,61 @@
+{
+  "definition": "Michelson contrast on relative luminance; constant area-weighted mean; inverse sRGB transfer function (assumed display curve). Shared by GratingContrast.swift and analysis/pilot_05/contrast_model.py.",
+  "mean_relative_luminance": 0.5,
+  "pitch_to_width_ratio": 2.4,
+  "levels": [
+    {
+      "percent": 0,
+      "code": "C000",
+      "contrast": 0.0,
+      "luminance_background": 0.5,
+      "luminance_bar": 0.5,
+      "code_background": 0.7353569830524495,
+      "code_bar": 0.7353569830524495
+    },
+    {
+      "percent": 5,
+      "code": "C005",
+      "contrast": 0.05,
+      "luminance_background": 0.5206611570247934,
+      "luminance_bar": 0.47107438016528924,
+      "code_background": 0.7488045328228239,
+      "code_bar": 0.7159740228359395
+    },
+    {
+      "percent": 10,
+      "code": "C010",
+      "contrast": 0.1,
+      "luminance_background": 0.5409836065573771,
+      "luminance_bar": 0.4426229508196721,
+      "code_background": 0.7617312443420605,
+      "code_bar": 0.6962190572685418
+    },
+    {
+      "percent": 20,
+      "code": "C020",
+      "contrast": 0.2,
+      "luminance_background": 0.5806451612903226,
+      "luminance_bar": 0.3870967741935484,
+      "code_background": 0.7861664923089995,
+      "code_bar": 0.6554125195665208
+    },
+    {
+      "percent": 40,
+      "code": "C040",
+      "contrast": 0.4,
+      "luminance_background": 0.65625,
+      "luminance_bar": 0.28125,
+      "code_background": 0.830179487750179,
+      "code_bar": 0.5668815623006097
+    },
+    {
+      "percent": 80,
+      "code": "C080",
+      "contrast": 0.8,
+      "luminance_background": 0.7941176470588236,
+      "luminance_bar": 0.08823529411764708,
+      "code_background": 0.9033801556971334,
+      "code_bar": 0.3286513820280063
+    }
+  ]
+}

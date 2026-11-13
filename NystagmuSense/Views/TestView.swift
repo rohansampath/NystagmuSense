@@ -14,10 +14,33 @@ struct TestView: View {
 
     init(mode: StimulusConfig.TrialMode = .okn, direction: StimulusConfig.Direction = .rightward,
          selection: TrialSelection = ExperimentLog().selection) {
+        _vm = StateObject(wrappedValue:
+            TestViewModel(stimulus: StimulusEngine(config: Self.stimulusConfig(mode: mode, direction: direction,
+                                                                               selection: selection)),
+                          selection: selection))
+    }
+
+    /// The stimulus a trial with this menu selection shows. Pilot 05 is always
+    /// regular OKN at the chosen nominal contrast; the other pilots keep their
+    /// fixed background.
+    static func stimulusConfig(mode: StimulusConfig.TrialMode, direction: StimulusConfig.Direction,
+                               selection: TrialSelection) -> StimulusConfig {
+        if selection.testType.usesContrast {
+            var config = StimulusConfig(mode: .okn, direction: direction)
+            if let contrast = selection.contrast { config.applyNominalContrast(contrast) }
+            return config
+        }
         var config = StimulusConfig(mode: mode, direction: direction)
         config.fixedBackgroundGray = selection.testType.fixedBackgroundGray
-        _vm = StateObject(wrappedValue:
-            TestViewModel(stimulus: StimulusEngine(config: config), selection: selection))
+        return config
+    }
+
+    /// Contrast trials hide the status card while recording, so nothing but the
+    /// grating is on screen (at 0 % nothing visible moves). It returns when the
+    /// trial ends.
+    private var showsStatusCard: Bool {
+        if case .recording = vm.phase, vm.stimulus.config.michelsonContrast != nil { return false }
+        return true
     }
 
     var body: some View {
@@ -27,6 +50,7 @@ struct TestView: View {
                 height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom)
             stimulus
             .overlay(alignment: .top) {
+                if showsStatusCard {
                 RecordingStatusCard(phase: vm.phase,
                                     isLandscape: vm.isLandscape,
                                     faceTracked: vm.faceTracked,
@@ -45,6 +69,7 @@ struct TestView: View {
                                     onTryAgain: vm.tryAgain,
                                     onClose: close)
                     .padding()
+                }
             }
             .onChange(of: surface, initial: true) { _, size in
                 vm.updateViewport(width: Double(size.width), height: Double(size.height))
