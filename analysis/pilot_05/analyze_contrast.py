@@ -119,8 +119,11 @@ def criteria(rows):
         out.append(dict(criterion="5 repeatability", participant=p, met="",
                         value=f"median |rep1-rep2| {med(spreads)}; range of contrast medians "
                               f"{(max(meds) - min(meds)) if meds else None}"))
-    strong = [r for r in rows if r["contrast_percent"] >= 20 and r["slow_median"] is not None]
-    share = np.mean([np.sign(r["slow_median"]) == -DIRECTION_SIGN[r["direction"]] for r in strong]) if strong else None
+    strong = [r for r in rows if r["contrast_percent"] >= 20]
+    # Unavailable responses provide no evidence of direction reversal; keep
+    # them in the denominator instead of inflating success by dropping them.
+    share = np.mean([r["slow_median"] is not None and
+                     np.sign(r["slow_median"]) == -DIRECTION_SIGN[r["direction"]] for r in strong]) if strong else None
     out.append(dict(criterion="4 direction reversal (>= 20 %)", participant="all",
                     met=share is not None and share >= 0.9, value=f"{share} of {len(strong)} trials"))
     for c in contrast_model.LEVELS:
@@ -148,7 +151,8 @@ def plot(rows, key, ylabel, path, chance=None):
         meds = [(x_of[c] + off, med([r[key] for r in rows if r["participant"] == p and r["contrast_percent"] == c]))
                 for c in contrast_model.LEVELS]
         meds = [(x, m) for x, m in meds if m is not None]
-        ax.plot(*zip(*meds), "-", color=colors[p], lw=1.2, label=f"{p} median")
+        if meds:
+            ax.plot(*zip(*meds), "-", color=colors[p], lw=1.2, label=f"{p} median")
     if chance is not None:
         ax.axhline(chance, color="0.5", ls=":", lw=1)
     ax.set_xticks(range(len(contrast_model.LEVELS)), [f"{c}" for c in contrast_model.LEVELS])

@@ -81,18 +81,21 @@ def technical_check(folder):
         problems.append("stimulus.direction disagrees with name")
     if stim.get("speedPointsPerSecond") != SPEED:
         problems.append(f"stripe speed {stim.get('speedPointsPerSecond')!r} is not {SPEED} pt/s")
+    for key, want in (("stripeWidthRatio", 0.02), ("pitchToWidthRatio", 2.4)):
+        if stim.get(key) != want:
+            problems.append(f"stimulus {key} is not the protocol value {want}")
     c = stim.get("michelsonContrast")
-    if not isinstance(c, (int, float)) or not math.isfinite(c):
+    if type(c) not in (int, float) or not math.isfinite(c):
         problems.append("no nominal contrast in metadata")
     else:
-        if round(100 * c) != percent:
+        if not math.isclose(c, percent / 100, rel_tol=0, abs_tol=1e-9):
             problems.append(f"michelsonContrast {c!r} disagrees with name C{percent:03d}")
         if percent not in contrast_model.LEVELS:
             problems.append(f"contrast {percent} % is not a Pilot 05 level")
         else:
             bg, bar = contrast_model.codes(percent / 100)
             got = (stim.get("fixedBackgroundGray"), stim.get("stripeGray"))
-            if not all(isinstance(v, (int, float)) for v in got) or abs(got[0] - bg) > 1e-9 or abs(got[1] - bar) > 1e-9:
+            if not all(type(v) in (int, float) and math.isfinite(v) for v in got) or abs(got[0] - bg) > 1e-9 or abs(got[1] - bar) > 1e-9:
                 problems.append("background/bar code values are not the contrast model's for this level")
     if stim.get("meanRelativeLuminance") != contrast_model.MEAN:
         problems.append(f"meanRelativeLuminance {stim.get('meanRelativeLuminance')!r} is not {contrast_model.MEAN}")

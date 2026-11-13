@@ -60,7 +60,7 @@ def write_p05(parent, participant, trial, percent, direction, gain=None, **stim_
         w = csv.writer(f)
         w.writerow(COLUMNS)
         w.writerows(zip(*(data[c] for c in COLUMNS)))
-    stimulus = dict(trialMode="okn", direction="rightward" if stim > 0 else "leftward", speedPointsPerSecond=126,
+    stimulus = dict(stripeWidthRatio=0.02, pitchToWidthRatio=2.4, trialMode="okn", direction="rightward" if stim > 0 else "leftward", speedPointsPerSecond=126,
                     michelsonContrast=percent / 100, meanRelativeLuminance=0.5, fixedBackgroundGray=bg, stripeGray=bar)
     stimulus.update(stim_overrides)
     meta = dict(schemaVersion=7, experimentID="P05", recordingName=name, participantID=participant, trialNumber=trial,
@@ -132,6 +132,18 @@ class Receiver(ServerTestCase):
         self.assertEqual(self.upload(stem=p04, meta=meta)[1]["code"], "mismatched_metadata")
         self.assertEqual(self.saved_folders(), [])
 
+    def test_invalid_contrast_is_rejected_without_breaking_receiver(self):
+        name = self.cases()[2]["name"]  # C020
+        for value in (float("nan"), float("inf"), -float("inf"), True, -0.2, 1.2, 0.204):
+            with self.subTest(value=value):
+                status, data = self.upload(stem=name, meta=self.meta(name, value))
+                self.assertEqual((status, data["code"]), (400, "mismatched_metadata"))
+        for stimulus in (None, [], "bad"):
+            meta = json.dumps(dict(recordingName=name, stimulus=stimulus))
+            self.assertEqual(self.upload(stem=name, meta=meta)[1]["code"], "mismatched_metadata")
+        self.assertEqual(self.saved_folders(), [])
+        self.assertEqual(self.upload(stem=name, meta=self.meta(name, 0.2))[0], 201)
+
     def test_contract_1_names_are_still_accepted_and_retries_stay_idempotent(self):
         p04 = "P04-P01_T061_OKN_RIGHT_20261109_150000"
         meta = json.dumps(dict(experimentID="P04", participantID="P01", recordingName=p04,
@@ -173,6 +185,16 @@ class Manifest(unittest.TestCase):
         self.assertEqual(by_id[extra]["eligibility"], "extra")
         write_p05(self.trials, "P02", 999, 0, "LEFT")
         self.assertIn("P02 C000 LEFT: 1/2", manifest.shortfalls(manifest.build(self.trials)[1]))
+
+    def test_nonfinite_codes_and_changed_geometry_are_technical_failures(self):
+        for i, overrides in enumerate((dict(stripeGray=float("nan")),
+                                       dict(fixedBackgroundGray=float("nan")),
+                                       dict(pitchToWidthRatio=3), dict(stripeWidthRatio=0.04),
+                                       dict(michelsonContrast=0.204))):
+            name = write_p05(self.trials, "P01", 800 + i, 20, "LEFT", **overrides)
+            problems, _ = manifest.technical_check(self.trials / name)
+            self.assertTrue(problems, overrides)
+        self.assertTrue(all(r["eligibility"] == "excluded" for r in manifest.build(self.trials)[0]))
 
     def test_empty_trials_folder_writes_nothing(self):
         with contextlib.redirect_stderr(io.StringIO()):
@@ -220,6 +242,23 @@ class Analysis(unittest.TestCase):
                 if c["participant"] in ("P01", "all")}
         self.assertEqual(crit["1 high-contrast response"], "False")
         self.assertEqual(crit["4 direction reversal (>= 20 %)"], "False")
+
+    def test_unavailable_responses_do_not_inflate_direction_reversal(self):
+        rows = []
+        for i in range(10):
+            rows.append(dict(participant="P01", contrast_percent=80, direction="RIGHT",
+                             aligned_slow_median=2.0 if i == 0 else None,
+                             slow_consistency=0.8 if i == 0 else None,
+                             slow_median=-2.0 if i == 0 else None, valid_fraction=0.95))
+        result = next(r for r in analysis.criteria(rows) if r["criterion"].startswith("4 "))
+        self.assertFalse(result["met"])
+        self.assertEqual(result["value"], "0.1 of 10 trials")
+
+    def test_all_unavailable_responses_still_produce_a_plot(self):
+        path = self.dir / "unavailable.png"
+        rows = [dict(participant="P01", contrast_percent=80, direction="RIGHT", aligned_slow_median=None)]
+        analysis.plot(rows, "aligned_slow_median", "velocity", path)
+        self.assertGreater(path.stat().st_size, 1000)
 
     def test_empty_and_missing_data_are_errors_not_results(self):
         self.manifest.write_text(",".join(manifest.FIELDS) + "\n")

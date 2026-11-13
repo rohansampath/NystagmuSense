@@ -27,6 +27,7 @@ import argparse
 import hmac
 import http.server
 import json
+import math
 import os
 import re
 import shutil
@@ -104,10 +105,12 @@ def parse_recording(body):
     stimulus = meta.get("stimulus")
     field = CONTRAST_FIELD_RE.search(stem)
     contrast = stimulus.get("michelsonContrast") if isinstance(stimulus, dict) else None
-    if isinstance(stimulus, dict) and (field or contrast is not None):
+    if field or contrast is not None:
         named = int(field[1]) if field else None
-        recorded = round(100 * contrast) if isinstance(contrast, (int, float)) else None
-        if named != recorded:
+        valid = (type(contrast) in (int, float) and math.isfinite(contrast)
+                 and 0 <= contrast <= 1 and named is not None
+                 and math.isclose(contrast, named / 100, rel_tol=0, abs_tol=1e-9))
+        if not valid:
             raise UploadError(400, "metadata contrast does not match the file name", "mismatched_metadata",
                               detail=f"name {named!r} metadata {contrast!r}")
     return stem, csv_text, json_text

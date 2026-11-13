@@ -345,3 +345,13 @@ contrast, every trial shown, one line per participant's medians.
 - **Nominal contrast and uncalibrated units**, as above.
 - **Detection isn't sensitivity.** A response that changes with contrast is a
   prerequisite for contrast sensitivity, not a measurement of it.
+
+### Review corrections before collection
+
+Technical checks reject non-finite display codes, changes to the protocol stripe
+width or pitch, and contrast values that merely round to the name's percentage.
+The receiver also rejects missing, non-finite and out-of-range contrast metadata.
+Unavailable slow-phase responses remain in the direction-reversal denominator
+and count as failures; they cannot inflate the 90 % criterion. Plots can be
+written even when all responses are unavailable. These checks do not change
+the frozen detector or response scores.

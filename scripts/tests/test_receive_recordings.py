@@ -194,7 +194,8 @@ class SharedNameContractTests(ServerTestCase):
 
     def test_every_app_generated_name_is_accepted_in_sequence(self):
         for case in FIXTURE["generated"]:          # sequential trials, every mode/direction/test type
-            status, data = self.upload(stem=case["name"])
+            meta = json.dumps({"stimulus": {"michelsonContrast": case["contrast"] / 100}}) if "contrast" in case else "{}"
+            status, data = self.upload(stem=case["name"], meta=meta)
             self.assertEqual((status, data.get("status")), (201, "saved"), case["name"])
         for case in FIXTURE["generated"]:
             folder = self.trials / case["name"]
