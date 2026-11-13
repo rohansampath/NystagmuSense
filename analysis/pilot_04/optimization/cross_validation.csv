@@ -1,0 +1,9 @@
+held_out,chosen_on_other_two,reason,detector,tp,fp,fn,precision,recall,f1,fp_per_10s
+P01,"22 deg/s, window 5, order 2",no eligible config beats the reference by more than 0.01 F1,"reference: 22 deg/s, window 5, order 2",41,46,58,0.471,0.414,0.441,2.314
+P01,"22 deg/s, window 5, order 2",no eligible config beats the reference by more than 0.01 F1,"chosen: 22 deg/s, window 5, order 2",41,46,58,0.471,0.414,0.441,2.314
+P02,"18 deg/s, window 7, order 2",best eligible config,"reference: 22 deg/s, window 5, order 2",37,9,69,0.804,0.349,0.487,0.452
+P02,"18 deg/s, window 7, order 2",best eligible config,"chosen: 18 deg/s, window 7, order 2",36,6,70,0.857,0.340,0.486,0.302
+P03,"18 deg/s, window 7, order 2",best eligible config,"reference: 22 deg/s, window 5, order 2",57,19,26,0.750,0.687,0.717,0.956
+P03,"18 deg/s, window 7, order 2",best eligible config,"chosen: 18 deg/s, window 7, order 2",58,18,25,0.763,0.699,0.730,0.906
+pooled,,,reference,135,74,153,0.646,0.469,0.543,1.241
+pooled,,,chosen,135,70,153,0.659,0.469,0.548,1.174

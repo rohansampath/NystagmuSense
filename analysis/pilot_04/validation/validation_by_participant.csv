@@ -1,0 +1,17 @@
+group,value,n_recordings,tp,fp,fn,precision,recall,f1,fp_per_10s,mean_abs_timing_ms,f1_bootstrap_2.5,f1_bootstrap_97.5
+all,all,60,135,74,153,0.646,0.469,0.543,1.241,17.3,0.430,0.645
+all,moving stripes only,48,135,39,153,0.776,0.469,0.584,0.817,17.3,0.475,0.685
+participant,P01,20,41,46,58,0.471,0.414,0.441,2.314,17.5,0.270,0.600
+participant,P02,20,37,9,69,0.804,0.349,0.487,0.452,16.2,0.265,0.683
+participant,P03,20,57,19,26,0.750,0.687,0.717,0.956,17.8,0.561,0.837
+participant status,returning,40,78,55,127,0.586,0.380,0.462,1.383,16.9,0.324,0.587
+participant status,new,20,57,19,26,0.750,0.687,0.717,0.956,17.8,0.561,0.837
+participant x condition,P01 OKN,8,33,8,10,0.805,0.767,0.786,1.006,19.2,0.712,0.861
+participant x condition,P01 FIXMOVE,8,8,8,48,0.500,0.143,0.222,1.006,10.4,0.083,0.377
+participant x condition,P01 FIXSTILL,4,0,30,0,0.000,,,7.545,,,
+participant x condition,P02 OKN,8,34,4,24,0.895,0.586,0.708,0.503,16.7,0.440,0.895
+participant x condition,P02 FIXMOVE,8,3,2,45,0.600,0.062,0.113,0.251,11.1,0.029,0.250
+participant x condition,P02 FIXSTILL,4,0,3,0,0.000,,,0.754,,,
+participant x condition,P03 OKN,8,45,14,3,0.763,0.938,0.841,1.761,19.6,0.729,0.931
+participant x condition,P03 FIXMOVE,8,12,3,23,0.800,0.343,0.480,0.377,11.1,0.250,0.723
+participant x condition,P03 FIXSTILL,4,0,2,0,0.000,,,0.503,,,

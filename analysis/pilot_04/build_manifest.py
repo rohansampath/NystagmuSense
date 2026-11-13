@@ -16,8 +16,9 @@ Rules (docs/PILOT_04.md):
   Missing distance data, a failed or bypassed distance check, and distance
   drift are notes.
 - Primary: per participant × condition × direction, the first N technically
-  valid recordings in trial-number order (4 OKN and 3 FIXMOVE per direction,
-  6 FIXSTILL). Later valid ones are "extra"; recordings the experimenter moved
+  valid recordings in trial-number order: 4 per cell (4 OKN and 4 FIXMOVE per
+  direction, 4 FIXSTILL), the protocol as actually collected. The original
+  plan was 4/3/6; see "Protocol deviation" in docs/PILOT_04.md. Later valid ones are "extra"; recordings the experimenter moved
   to trials/_excluded_P04/ are "excluded".
 - Every primary recording has role external_validation and split
   "evaluation": the annotation tool never shows detector suggestions for it,
@@ -41,7 +42,7 @@ CODE = "P04"
 PARTICIPANTS = {"P01": "returning", "P02": "returning", "P03": "new"}
 NAME_RE = re.compile(r"P04-(P\d\d)_T(\d+)_(OKN|FIXMOVE|FIXSTILL)_(RIGHT|LEFT|NONE)_(\d{8}_\d{6})")
 MODES = {"okn": "OKN", "fixationMovingStripes": "FIXMOVE", "fixationStillStripes": "FIXSTILL"}
-PER_CELL = {"OKN": 4, "FIXMOVE": 3, "FIXSTILL": 6}
+PER_CELL = {"OKN": 4, "FIXMOVE": 4, "FIXSTILL": 4}      # as collected (planned 4/3/6)
 MIN_SAMPLES, MIN_TRACKED = 570, 0.90
 FIELDS = ["trial_id", "participant", "participant_status", "trial_number", "condition", "direction", "folder",
           "technical_status", "technical_notes", "eligibility", "exclusion_reason", "role", "split"]

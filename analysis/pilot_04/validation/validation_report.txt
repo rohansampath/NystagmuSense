@@ -1,0 +1,91 @@
+split: evaluation (60 primary trials in analysis/pilot_04/manifest.csv); artifacts: exclude
+
+Detector: sg-direction (experimental), fast threshold 22 deg/s
+tolerance ±100 ms; predictions = detector fast-phase starts
+labels are ARKit-visible events, not physiological ground truth
+
+trial                                    annot  method   mode                   TP FP FN unc  P     R     F1
+P04-P01_T057_OKN_LEFT_20261108_233916    AA     manual   okn                     5  0  0   0  1.00  1.00  1.00
+P04-P01_T058_OKN_LEFT_20261108_233942    AA     manual   okn                     3  1  0   0  0.75  1.00  0.86
+P04-P01_T059_OKN_LEFT_20261108_234012    AA     manual   okn                     3  2  0   0  0.60  1.00  0.75
+P04-P01_T060_OKN_LEFT_20261108_234046    AA     manual   okn                     5  1  1   0  0.83  0.83  0.83
+P04-P01_T061_OKN_RIGHT_20261108_234122   AA     manual   okn                     2  1  2   0  0.67  0.50  0.57
+P04-P01_T062_OKN_RIGHT_20261108_234138   AA     manual   okn                     4  0  4   0  1.00  0.50  0.67
+P04-P01_T063_OKN_RIGHT_20261108_234154   AA     manual   okn                     5  1  2   0  0.83  0.71  0.77
+P04-P01_T064_OKN_RIGHT_20261108_234210   AA     manual   okn                     6  2  1   0  0.75  0.86  0.80
+P04-P01_T065_FIXMOVE_LEFT_20261108_23423 AA     manual   fixationMovingStripes   1  0  6   0  1.00  0.14  0.25
+P04-P01_T067_FIXMOVE_LEFT_20261108_23431 AA     manual   fixationMovingStripes   1  0  8   0  1.00  0.11  0.20
+P04-P01_T068_FIXMOVE_LEFT_20261108_23434 AA     manual   fixationMovingStripes   1  2  6   0  0.33  0.14  0.20
+P04-P01_T069_FIXMOVE_LEFT_20261108_23443 AA     manual   fixationMovingStripes   0  6  0   0  0.00  n/a   0.00
+P04-P01_T070_FIXMOVE_RIGHT_20261108_2351 AA     manual   fixationMovingStripes   0  0 14   0  n/a   0.00  0.00
+P04-P01_T071_FIXMOVE_RIGHT_20261108_2351 AA     manual   fixationMovingStripes   2  0  4   0  1.00  0.33  0.50
+P04-P01_T072_FIXMOVE_RIGHT_20261108_2351 AA     manual   fixationMovingStripes   0  0  5   0  n/a   0.00  0.00
+P04-P01_T073_FIXMOVE_RIGHT_20261108_2351 AA     manual   fixationMovingStripes   3  0  5   0  1.00  0.38  0.55
+P04-P01_T074_FIXSTILL_NONE_20261108_2352 AA     manual   fixationStillStripes    0  4  0   0  0.00  n/a   0.00
+P04-P01_T075_FIXSTILL_NONE_20261108_2352 AA     manual   fixationStillStripes    0 13  0   0  0.00  n/a   0.00
+P04-P01_T076_FIXSTILL_NONE_20261108_2353 AA     manual   fixationStillStripes    0  9  0   0  0.00  n/a   0.00
+P04-P01_T077_FIXSTILL_NONE_20261108_2353 AA     manual   fixationStillStripes    0  4  0   0  0.00  n/a   0.00
+P04-P02_T078_OKN_LEFT_20261109_000741    AA     manual   okn                     6  1  1   0  0.86  0.86  0.86
+P04-P02_T079_OKN_LEFT_20261109_000800    AA     manual   okn                     5  1  0   0  0.83  1.00  0.91
+P04-P02_T080_OKN_LEFT_20261109_000816    AA     manual   okn                     3  0  2   0  1.00  0.60  0.75
+P04-P02_T081_OKN_LEFT_20261109_000833    AA     manual   okn                     0  0 14   0  n/a   0.00  0.00
+P04-P02_T082_OKN_RIGHT_20261109_000850   AA     manual   okn                     3  0  5   0  1.00  0.38  0.55
+P04-P02_T083_OKN_RIGHT_20261109_000906   AA     manual   okn                     5  0  0   0  1.00  1.00  1.00
+P04-P02_T084_OKN_RIGHT_20261109_000935   AA     manual   okn                     4  1  2   0  0.80  0.67  0.73
+P04-P02_T085_OKN_RIGHT_20261109_000951   AA     manual   okn                     8  1  0   0  0.89  1.00  0.94
+P04-P02_T086_FIXMOVE_LEFT_20261109_00100 AA     manual   fixationMovingStripes   1  0  6   0  1.00  0.14  0.25
+P04-P02_T087_FIXMOVE_LEFT_20261109_00102 AA     manual   fixationMovingStripes   0  0  9   0  n/a   0.00  0.00
+P04-P02_T088_FIXMOVE_LEFT_20261109_00104 AA     manual   fixationMovingStripes   1  0  5   0  1.00  0.17  0.29
+P04-P02_T089_FIXMOVE_LEFT_20261109_00105 AA     manual   fixationMovingStripes   0  0  8   0  n/a   0.00  0.00
+P04-P02_T090_FIXMOVE_RIGHT_20261109_0011 AA     manual   fixationMovingStripes   0  0  9   0  n/a   0.00  0.00
+P04-P02_T091_FIXMOVE_RIGHT_20261109_0011 AA     manual   fixationMovingStripes   0  1  1   0  0.00  0.00  0.00
+P04-P02_T092_FIXMOVE_RIGHT_20261109_0011 AA     manual   fixationMovingStripes   0  1  6   0  0.00  0.00  0.00
+P04-P02_T093_FIXMOVE_RIGHT_20261109_0012 AA     manual   fixationMovingStripes   1  0  1   0  1.00  0.50  0.67
+P04-P02_T094_FIXSTILL_NONE_20261109_0012 AA     manual   fixationStillStripes    0  1  0   0  0.00  n/a   0.00
+P04-P02_T095_FIXSTILL_NONE_20261109_0012 AA     manual   fixationStillStripes    0  1  0   0  0.00  n/a   0.00
+P04-P02_T096_FIXSTILL_NONE_20261109_0013 AA     manual   fixationStillStripes    0  1  0   0  0.00  n/a   0.00
+P04-P02_T097_FIXSTILL_NONE_20261109_0013 AA     manual   fixationStillStripes    0  0  0   0  n/a   n/a   n/a
+P04-P03_T098_OKN_LEFT_20261109_001545    AA     manual   okn                     4  6  0   0  0.40  1.00  0.57
+P04-P03_T099_OKN_LEFT_20261109_001603    AA     manual   okn                     5  1  0   0  0.83  1.00  0.91
+P04-P03_T100_OKN_LEFT_20261109_001620    AA     manual   okn                     5  1  3   0  0.83  0.62  0.71
+P04-P03_T101_OKN_LEFT_20261109_001639    AA     manual   okn                     7  1  0   0  0.88  1.00  0.93
+P04-P03_T102_OKN_RIGHT_20261109_001715   AA     manual   okn                     3  2  0   0  0.60  1.00  0.75
+P04-P03_T103_OKN_RIGHT_20261109_001731   AA     manual   okn                     6  2  0   0  0.75  1.00  0.86
+P04-P03_T104_OKN_RIGHT_20261109_001748   AA     manual   okn                    10  0  0   0  1.00  1.00  1.00
+P04-P03_T105_OKN_RIGHT_20261109_001808   AA     manual   okn                     5  1  0   0  0.83  1.00  0.91
+P04-P03_T106_FIXMOVE_LEFT_20261109_00182 AA     manual   fixationMovingStripes   3  0  0   0  1.00  1.00  1.00
+P04-P03_T107_FIXMOVE_LEFT_20261109_00184 AA     manual   fixationMovingStripes   0  1  6   0  0.00  0.00  0.00
+P04-P03_T108_FIXMOVE_LEFT_20261109_00190 AA     manual   fixationMovingStripes   1  1  0   0  0.50  1.00  0.67
+P04-P03_T109_FIXMOVE_LEFT_20261109_00192 AA     manual   fixationMovingStripes   3  1  0   0  0.75  1.00  0.86
+P04-P03_T110_FIXMOVE_RIGHT_20261109_0019 AA     manual   fixationMovingStripes   0  0  5   0  n/a   0.00  0.00
+P04-P03_T111_FIXMOVE_RIGHT_20261109_0020 AA     manual   fixationMovingStripes   2  0  6   0  1.00  0.25  0.40
+P04-P03_T112_FIXMOVE_RIGHT_20261109_0020 AA     manual   fixationMovingStripes   1  0  4   0  1.00  0.20  0.33
+P04-P03_T113_FIXMOVE_RIGHT_20261109_0020 AA     manual   fixationMovingStripes   2  0  2   0  1.00  0.50  0.67
+P04-P03_T114_FIXSTILL_NONE_20261109_0021 AA     manual   fixationStillStripes    0  0  0   0  n/a   n/a   n/a
+P04-P03_T115_FIXSTILL_NONE_20261109_0021 AA     manual   fixationStillStripes    0  0  0   0  n/a   n/a   n/a
+P04-P03_T116_FIXSTILL_NONE_20261109_0021 AA     manual   fixationStillStripes    0  0  0   0  n/a   n/a   n/a
+P04-P03_T117_FIXSTILL_NONE_20261109_0022 AA     manual   fixationStillStripes    0  2  0   0  0.00  n/a   0.00
+
+manual — PRIMARY (independent labels): 60 trials, TP 135 FP 74 FN 153: precision 0.65, recall 0.47, F1 0.54
+  fixation trials: 48 false detections in 36 reviewed trials (1.33 per trial)
+
+assisted: no completely reviewed trials
+
+group                              trials  TP  FP  FN  P     R     F1    FP/10s
+all: all                              60 135  74 153  0.65  0.47  0.54  1.24
+participant: P01                      20  41  46  58  0.47  0.41  0.44  2.31
+participant: P02                      20  37   9  69  0.80  0.35  0.49  0.45
+participant: P03                      20  57  19  26  0.75  0.69  0.72  0.96
+condition: FIXMOVE                    24  23  13 116  0.64  0.17  0.26  0.54
+condition: FIXSTILL                   12   0  35   0  0.00  n/a   0.00  2.93
+condition: OKN                        24 112  26  37  0.81  0.75  0.78  1.09
+participant x condition: P01 FIXMOVE     8   8   8  48  0.50  0.14  0.22  1.01
+participant x condition: P01 FIXSTILL     4   0  30   0  0.00  n/a   0.00  7.55
+participant x condition: P01 OKN       8  33   8  10  0.80  0.77  0.79  1.01
+participant x condition: P02 FIXMOVE     8   3   2  45  0.60  0.06  0.11  0.25
+participant x condition: P02 FIXSTILL     4   0   3   0  0.00  n/a   0.00  0.75
+participant x condition: P02 OKN       8  34   4  24  0.89  0.59  0.71  0.50
+participant x condition: P03 FIXMOVE     8  12   3  23  0.80  0.34  0.48  0.38
+participant x condition: P03 FIXSTILL     4   0   2   0  0.00  n/a   0.00  0.50
+participant x condition: P03 OKN       8  45  14   3  0.76  0.94  0.84  1.76
+per-trial results: analysis/pilot_04/validation/validation_results.csv
