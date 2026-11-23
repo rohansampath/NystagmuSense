@@ -16,3 +16,12 @@ analysis/pilot_03/label_flags.csv
 # Independent event labels and review status stay private, like raw recordings.
 analysis/**/events.csv
 analysis/**/reviews.csv
+
+# Screen recordings and demo clips stay local.
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.gif
+*.GIF
+
